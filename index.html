@@ -42,9 +42,7 @@
         </div>
 
         <div class="hint" id="hint"></div>
-        <div class="small">
-          Tip: Share the 6-digit code with friends. Images work after you enable Firebase Storage.
-        </div>
+        <div class="small">Text-only to stay completely free.</div>
       </section>
 
       <section class="card chat">
@@ -58,21 +56,8 @@
 
         <div id="messages" class="messages"></div>
 
-        <!-- Image preview bar -->
-        <div id="previewBar" class="previewBar hidden">
-          <img id="previewImg" class="previewImg" alt="preview" />
-          <div class="previewMeta">
-            <div class="previewTitle">Ready to send</div>
-            <div class="previewSub" id="previewName"></div>
-          </div>
-          <button id="cancelImgBtn" class="btn">Cancel</button>
-          <button id="sendImgBtn" class="btn primary">Send image</button>
-        </div>
-
         <div class="composer">
           <input id="msg" class="inp" placeholder="Type a message…" disabled />
-          <input id="img" type="file" accept="image/*" hidden />
-          <button id="imgBtn" class="btn" disabled>Image</button>
           <button id="sendBtn" class="btn primary" disabled>Send</button>
         </div>
       </section>
