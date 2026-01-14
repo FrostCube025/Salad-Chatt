@@ -9,13 +9,14 @@ import {
 
 // --------------- STEP A: Paste your Firebase config here ---------------
 const firebaseConfig = {
-  // You will fill this in after creating a Firebase project.
-  // apiKey: "...",
-  // authDomain: "...",
-  // projectId: "...",
-  // storageBucket: "...",
-  // messagingSenderId: "...",
-  // appId: "..."
+  const firebaseConfig = {
+  apiKey: "AIzaSyDrZ-maG46ecU5Fgidqyrws1DdNoEfqeFI",
+  authDomain: "salad-chatt.firebaseapp.com",
+  projectId: "salad-chatt",
+  storageBucket: "salad-chatt.firebasestorage.app",
+  messagingSenderId: "841208847669",
+  appId: "1:841208847669:web:568e254429166d05c2c07c",
+  measurementId: "G-FFF48MW8EL"
 };
 // ----------------------------------------------------------------------
 
