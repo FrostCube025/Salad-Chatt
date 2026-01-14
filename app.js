@@ -1,15 +1,15 @@
-// Salad Chatt (Firebase Firestore rooms)
-// Works on GitHub Pages because Firebase runs in the browser.
-
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
 import {
-  getFirestore, collection, doc, setDoc, addDoc, serverTimestamp,
-  query, orderBy, limit, onSnapshot
+  getFirestore,
+  collection,
+  doc,
+  setDoc,
+  addDoc,
+  onSnapshot,
+  serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
 
-// --------------- STEP A: Paste your Firebase config here ---------------
 const firebaseConfig = {
-  const firebaseConfig = {
   apiKey: "AIzaSyDrZ-maG46ecU5Fgidqyrws1DdNoEfqeFI",
   authDomain: "salad-chatt.firebaseapp.com",
   projectId: "salad-chatt",
@@ -18,185 +18,97 @@ const firebaseConfig = {
   appId: "1:841208847669:web:568e254429166d05c2c07c",
   measurementId: "G-FFF48MW8EL"
 };
-// ----------------------------------------------------------------------
 
-const el = (id) => document.getElementById(id);
+alert("app.js loaded"); // REMOVE LATER
 
-const nickEl = el("nick");
-const codeEl = el("code");
-const hintEl = el("hint");
-const statusEl = el("status");
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
-const roomCodeEl = el("roomCode");
-const msgsEl = el("messages");
+// Elements
+const nick = document.getElementById("nick");
+const codeInput = document.getElementById("code");
+const hostBtn = document.getElementById("hostBtn");
+const joinBtn = document.getElementById("joinBtn");
+const leaveBtn = document.getElementById("leaveBtn");
+const sendBtn = document.getElementById("sendBtn");
+const msgInput = document.getElementById("msg");
+const messages = document.getElementById("messages");
+const roomSpan = document.getElementById("room");
 
-const msgEl = el("msg");
-const sendBtn = el("sendBtn");
-const joinBtn = el("joinBtn");
-const hostBtn = el("hostBtn");
-const copyBtn = el("copyBtn");
-const leaveBtn = el("leaveBtn");
+let roomCode = null;
+let unsubscribe = null;
 
-function setHint(t) { hintEl.textContent = t || ""; }
-function setStatus(t) { statusEl.textContent = t || ""; }
-
-function genCode6() {
-  // 6 digits, numbers only
+// Utils
+function genCode() {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
 
-function safeNick() {
-  const n = (nickEl.value || "").trim();
-  return n.length ? n.slice(0, 20) : "Anonymous";
+function addMessage(nick, text) {
+  const div = document.createElement("div");
+  div.className = "msg";
+  div.innerHTML = `<div class="meta">${nick}</div>${text}`;
+  messages.appendChild(div);
+  messages.scrollTop = messages.scrollHeight;
 }
 
-function clearMessagesUI() {
-  msgsEl.innerHTML = "";
-}
-
-function addMessageUI({ nick, text, createdAt }) {
-  const wrap = document.createElement("div");
-  wrap.className = "msg";
-
-  const meta = document.createElement("div");
-  meta.className = "meta";
-
-  const when = createdAt?.toDate ? createdAt.toDate() : null;
-  meta.textContent = `${nick} • ${when ? when.toLocaleString() : "just now"}`;
-
-  const body = document.createElement("div");
-  body.className = "text";
-  body.textContent = text;
-
-  wrap.appendChild(meta);
-  wrap.appendChild(body);
-  msgsEl.appendChild(wrap);
-
-  msgsEl.scrollTop = msgsEl.scrollHeight;
-}
-
-let app = null;
-let db = null;
-let currentRoomCode = null;
-let unsub = null;
-
-function firebaseReady() {
-  // basic guard so you don't forget config
-  return firebaseConfig && firebaseConfig.apiKey;
-}
-
-function enableChatUI(enabled) {
-  msgEl.disabled = !enabled;
-  sendBtn.disabled = !enabled;
-  leaveBtn.disabled = !enabled;
-  copyBtn.disabled = !enabled;
-
-  // joining/hosting should be disabled while in a room
-  joinBtn.disabled = enabled;
-  hostBtn.disabled = enabled;
-  codeEl.disabled = enabled;
-  nickEl.disabled = false; // allow nick change anytime (optional)
-}
-
-async function ensureFirebase() {
-  if (!firebaseReady()) {
-    setStatus("Missing Firebase config");
-    setHint("Open app.js and paste your Firebase config (Step 4).");
-    throw new Error("Firebase config not set");
-  }
-  if (!app) {
-    app = initializeApp(firebaseConfig);
-    db = getFirestore(app);
-    setStatus("Firebase ready");
-  }
-}
-
-function leaveRoom() {
-  if (unsub) unsub();
-  unsub = null;
-  currentRoomCode = null;
-  roomCodeEl.textContent = "—";
-  clearMessagesUI();
-  enableChatUI(false);
-  setStatus("Not connected");
-  setHint("");
-}
-
+// Join room
 async function joinRoom(code) {
-  await ensureFirebase();
+  roomCode = code;
+  roomSpan.textContent = code;
 
-  const clean = (code || "").trim();
-  if (!/^\d{6}$/.test(clean)) {
-    setHint("Room code must be 6 digits.");
-    return;
-  }
+  await setDoc(doc(db, "rooms", code), { createdAt: serverTimestamp() }, { merge: true });
 
-  // create room doc if it doesn’t exist (harmless)
-  const roomRef = doc(db, "rooms", clean);
-  await setDoc(roomRef, { createdAt: serverTimestamp() }, { merge: true });
+  const msgsRef = collection(db, "rooms", code, "messages");
 
-  currentRoomCode = clean;
-  roomCodeEl.textContent = clean;
-  enableChatUI(true);
-  setStatus(`In room ${clean}`);
-  setHint("Connected. Say hi!");
-
-  // listen to last 100 messages
-  const msgsRef = collection(db, "rooms", clean, "messages");
-  const q = query(msgsRef, orderBy("createdAt", "asc"), limit(100));
-
-  if (unsub) unsub();
-  clearMessagesUI();
-
-  unsub = onSnapshot(q, (snap) => {
-    clearMessagesUI();
-    snap.forEach((d) => addMessageUI(d.data()));
+  unsubscribe = onSnapshot(msgsRef, snap => {
+    messages.innerHTML = "";
+    snap.forEach(d => {
+      const m = d.data();
+      addMessage(m.nick, m.text);
+    });
   });
+
+  msgInput.disabled = false;
+  sendBtn.disabled = false;
+  leaveBtn.disabled = false;
 }
 
-async function sendMessage() {
-  if (!currentRoomCode) return;
-  await ensureFirebase();
-
-  const text = (msgEl.value || "").trim();
-  if (!text) return;
-
-  msgEl.value = "";
-
-  const msgsRef = collection(db, "rooms", currentRoomCode, "messages");
-  await addDoc(msgsRef, {
-    nick: safeNick(),
-    text,
-    createdAt: serverTimestamp()
-  });
-}
-
-// UI wiring
+// Buttons
 hostBtn.onclick = async () => {
-  const code = genCode6();
-  codeEl.value = code;
-  setHint(`Hosting room: ${code} (share this code)`);
+  const code = genCode();
+  codeInput.value = code;
   await joinRoom(code);
 };
 
 joinBtn.onclick = async () => {
-  await joinRoom(codeEl.value);
+  if (!/^\d{6}$/.test(codeInput.value)) {
+    alert("Invalid code");
+    return;
+  }
+  await joinRoom(codeInput.value);
 };
 
-copyBtn.onclick = async () => {
-  if (!currentRoomCode) return;
-  await navigator.clipboard.writeText(currentRoomCode);
-  setHint("Room code copied!");
+sendBtn.onclick = async () => {
+  if (!roomCode) return;
+  const text = msgInput.value.trim();
+  if (!text) return;
+
+  msgInput.value = "";
+
+  await addDoc(collection(db, "rooms", roomCode, "messages"), {
+    nick: nick.value || "Anon",
+    text,
+    createdAt: serverTimestamp()
+  });
 };
 
-leaveBtn.onclick = () => leaveRoom();
-
-sendBtn.onclick = () => sendMessage();
-msgEl.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") sendMessage();
-});
-
-// Start state
-enableChatUI(false);
-setStatus("Not connected");
-setHint("Tip: Click Host to create a room code, or enter a code and Join.");
+leaveBtn.onclick = () => {
+  if (unsubscribe) unsubscribe();
+  unsubscribe = null;
+  roomCode = null;
+  roomSpan.textContent = "—";
+  messages.innerHTML = "";
+  msgInput.disabled = true;
+  sendBtn.disabled = true;
+  leaveBtn.disabled = true;
+};
