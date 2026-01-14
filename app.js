@@ -19,8 +19,6 @@ const firebaseConfig = {
   measurementId: "G-FFF48MW8EL"
 };
 
-alert("app.js loaded"); // REMOVE LATER
-
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
