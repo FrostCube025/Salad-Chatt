@@ -93,7 +93,7 @@ body{
 
 .messages{
   margin-top:12px;
-  height: 430px;
+  height: 460px;
   overflow:auto;
   border-radius:14px;
   border:1px solid rgba(255,255,255,.12);
@@ -121,7 +121,6 @@ body{
   border-radius: 16px;
   border:1px solid rgba(255,255,255,.10);
   background: rgba(255,255,255,.06);
-  position:relative;
 }
 .me .bubble{
   background: rgba(45,226,230,.14);
@@ -144,14 +143,6 @@ body{
   color: rgba(238,242,255,.55);
   margin-top:6px;
   text-align:right;
-}
-
-/* images */
-.img{
-  display:block;
-  max-width: 100%;
-  border-radius: 12px;
-  border:1px solid rgba(255,255,255,.12);
 }
 
 /* reactions */
@@ -189,25 +180,3 @@ body{
   align-items:center;
   flex-wrap:wrap;
 }
-
-/* image preview bar */
-.previewBar{
-  margin-top:12px;
-  display:flex;
-  gap:12px;
-  align-items:center;
-  padding:10px;
-  border-radius:14px;
-  border:1px solid rgba(255,255,255,.12);
-  background: rgba(0,0,0,.18);
-}
-.previewBar.hidden{ display:none; }
-.previewImg{
-  width:64px; height:64px;
-  object-fit:cover;
-  border-radius:12px;
-  border:1px solid rgba(255,255,255,.12);
-}
-.previewMeta{ flex:1; min-width: 120px; }
-.previewTitle{ font-weight:900; font-size:13px; }
-.previewSub{ font-size:12px; color:rgba(238,242,255,.65); margin-top:2px; }
