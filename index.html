@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Salad Chatt</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="shell">
+    <header class="top">
+      <div class="brand">
+        <div class="badge">🥗</div>
+        <div>
+          <div class="h1">Salad Chatt</div>
+          <div class="sub">Host or join a room using a 6-digit code</div>
+        </div>
+      </div>
+      <div class="status" id="status">Not connected</div>
+    </header>
+
+    <main class="grid">
+      <section class="card">
+        <div class="cardTitle">Host / Join</div>
+
+        <label class="lbl">Nickname</label>
+        <input id="nick" class="inp" maxlength="20" placeholder="e.g. FrostCube" />
+
+        <label class="lbl">Room code (6 digits)</label>
+        <div class="row">
+          <input id="code" class="inp" maxlength="6" inputmode="numeric" placeholder="e.g. 482193" />
+          <button id="joinBtn" class="btn primary">Join</button>
+        </div>
+
+        <div class="row">
+          <button id="hostBtn" class="btn">Host (generate code)</button>
+          <button id="copyBtn" class="btn" disabled>Copy code</button>
+        </div>
+
+        <div class="hint" id="hint"></div>
+
+        <div class="small">
+          Tip: Share the 6-digit code with friends.
+        </div>
+      </section>
+
+      <section class="card chat">
+        <div class="cardTitle">Room</div>
+
+        <div class="roomLine">
+          <span>Code:</span> <strong id="roomCode">—</strong>
+          <span class="spacer"></span>
+          <button id="leaveBtn" class="btn" disabled>Leave</button>
+        </div>
+
+        <div id="messages" class="messages"></div>
+
+        <div class="row">
+          <input id="msg" class="inp" placeholder="Type a message…" disabled />
+          <button id="sendBtn" class="btn primary" disabled>Send</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- IMPORTANT: this must be type="module" for Firebase -->
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
