@@ -17,16 +17,15 @@ import {
   onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
 
-/* ===== PASTE YOUR FIREBASE CONFIG HERE ===== */
 const firebaseConfig = {
-  apiKey: "PASTE_HERE",
-  authDomain: "PASTE_HERE",
-  projectId: "PASTE_HERE",
-  storageBucket: "PASTE_HERE",
-  messagingSenderId: "PASTE_HERE",
-  appId: "PASTE_HERE"
+  apiKey: "AIzaSyDrZ-maG46ecU5Fgidqyrws1DdNoEfqeFI",
+  authDomain: "salad-chatt.firebaseapp.com",
+  projectId: "salad-chatt",
+  storageBucket: "salad-chatt.firebasestorage.app",
+  messagingSenderId: "841208847669",
+  appId: "1:841208847669:web:568e254429166d05c2c07c",
+  measurementId: "G-FFF48MW8EL"
 };
-/* ========================================== */
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
