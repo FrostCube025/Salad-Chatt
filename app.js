@@ -54,22 +54,28 @@ function setStatus(t) { statusEl.textContent = t || ""; }
 function genCode6() {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
+
 function safeNick() {
   const n = (nickEl.value || "").trim();
   return n.length ? n.slice(0, 20) : "Anonymous";
 }
+
 function fmtTime(ts) {
   const d = ts?.toDate ? ts.toDate() : null;
   return d ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
 }
 
-// stable user id for "my messages"
+/**
+ * IMPORTANT FIX:
+ * Use sessionStorage so each TAB gets a unique user id.
+ * (localStorage is shared across tabs and caused both of your bugs)
+ */
 function getOrCreateUserId() {
-  const key = "saladchatt_uid_v1";
-  let id = localStorage.getItem(key);
+  const key = "saladchatt_uid_session_v1";
+  let id = sessionStorage.getItem(key);
   if (!id) {
     id = crypto.getRandomValues(new Uint32Array(2)).join("").slice(0, 10);
-    localStorage.setItem(key, id);
+    sessionStorage.setItem(key, id);
   }
   return id;
 }
@@ -91,17 +97,19 @@ function clearMessagesUI() { msgsEl.innerHTML = ""; }
 function isNearBottom(container) {
   return container.scrollHeight - container.scrollTop - container.clientHeight < 140;
 }
-function scrollToBottom(container) { container.scrollTop = container.scrollHeight; }
+function scrollToBottom(container) {
+  container.scrollTop = container.scrollHeight;
+}
+
+// reactions
+const REACTIONS = ["👍", "😂", "❤️", "🔥"];
 
 let currentRoomCode = null;
 let unsubMsgs = null;
 let unsubPresence = null;
 let heartbeatTimer = null;
 
-// reactions
-const REACTIONS = ["👍", "😂", "❤️", "🔥"];
-
-// -------- Presence + cleanup (best-effort) --------
+// ---------- Presence ----------
 function presenceDoc(roomId, userId) {
   return doc(db, "rooms", roomId, "presence", userId);
 }
@@ -143,6 +151,7 @@ async function startPresence(roomId) {
   window.addEventListener("beforeunload", onUnloadCleanup, { once: true });
 }
 
+// ---------- Cleanup helpers ----------
 async function deleteSubcollection(roomId, subName) {
   while (true) {
     const q = query(collection(db, "rooms", roomId, subName), limit(200));
@@ -156,7 +165,7 @@ async function deleteSubcollection(roomId, subName) {
 }
 
 async function clearRoomIfEmpty(roomId) {
-  // Check if anyone is still present
+  // check if anyone is still present
   const snap = await getDocs(query(presenceColl(roomId), limit(1)));
   if (!snap.empty) return;
 
@@ -171,7 +180,7 @@ async function clearRoomIfEmpty(roomId) {
   setHint("");
 }
 
-// -------- Join / Leave --------
+// ---------- Join / Leave ----------
 async function joinRoom(code) {
   const clean = (code || "").trim();
   if (!/^\d{6}$/.test(clean)) {
@@ -189,13 +198,9 @@ async function joinRoom(code) {
 
   await startPresence(clean);
 
-  // presence listener (helps cleanup logic)
+  // presence listener (no deletion here; just helpful if you want future UI)
   if (unsubPresence) unsubPresence();
-  unsubPresence = onSnapshot(presenceColl(clean), async (snap) => {
-    if (snap.empty) {
-      await clearRoomIfEmpty(clean);
-    }
-  });
+  unsubPresence = onSnapshot(presenceColl(clean), () => {});
 
   // messages listener
   const msgsRef = collection(db, "rooms", clean, "messages");
@@ -206,7 +211,6 @@ async function joinRoom(code) {
 
   unsubMsgs = onSnapshot(qMsgs, (snap) => {
     const keepPinned = !isNearBottom(msgsEl);
-
     clearMessagesUI();
 
     snap.forEach((d) => {
@@ -270,17 +274,21 @@ async function joinRoom(code) {
 async function leaveRoom() {
   const roomId = currentRoomCode;
 
+  // stop listeners
   if (unsubMsgs) unsubMsgs();
   unsubMsgs = null;
   if (unsubPresence) unsubPresence();
   unsubPresence = null;
 
+  // stop heartbeat
   stopPresence();
 
+  // delete our presence doc
   if (roomId) {
     try { await deleteDoc(presenceDoc(roomId, myUserId)); } catch {}
   }
 
+  // clear UI
   currentRoomCode = null;
   roomCodeEl.textContent = "—";
   clearMessagesUI();
@@ -288,12 +296,14 @@ async function leaveRoom() {
   setStatus("Not connected");
   setHint("");
 
+  // IMPORTANT FIX:
+  // Delay cleanup slightly to avoid race conditions.
   if (roomId) {
-    await clearRoomIfEmpty(roomId);
+    setTimeout(() => clearRoomIfEmpty(roomId), 1500);
   }
 }
 
-// -------- Sending --------
+// ---------- Send / React ----------
 async function sendText() {
   if (!currentRoomCode) return;
 
@@ -301,7 +311,6 @@ async function sendText() {
   if (!text) return;
 
   msgEl.value = "";
-
   await addDoc(collection(db, "rooms", currentRoomCode, "messages"), {
     type: "text",
     userId: myUserId,
@@ -324,7 +333,7 @@ async function reactToMessage(roomId, msgId, emoji) {
   await updateDoc(msgRef, { [`reactions.${emoji}`]: current + 1 });
 }
 
-// -------- UI wiring --------
+// ---------- UI wiring ----------
 hostBtn.onclick = async () => {
   const code = genCode6();
   codeEl.value = code;
@@ -349,7 +358,7 @@ msgEl.addEventListener("keydown", (e) => {
   if (e.key === "Enter") sendText();
 });
 
-// Start state
+// initial state
 enableChatUI(false);
 setStatus("Not connected");
 setHint("Click Host to create a room, or enter a 6-digit code and Join.");
