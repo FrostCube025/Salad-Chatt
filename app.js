@@ -17,15 +17,16 @@ import {
   onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
 
+/* ===== PASTE YOUR FIREBASE CONFIG HERE ===== */
 const firebaseConfig = {
-  apiKey: "AIzaSyDrZ-maG46ecU5Fgidqyrws1DdNoEfqeFI",
-  authDomain: "salad-chatt.firebaseapp.com",
-  projectId: "salad-chatt",
-  storageBucket: "salad-chatt.firebasestorage.app",
-  messagingSenderId: "841208847669",
-  appId: "1:841208847669:web:568e254429166d05c2c07c",
-  measurementId: "G-FFF48MW8EL"
+  apiKey: "PASTE_HERE",
+  authDomain: "PASTE_HERE",
+  projectId: "PASTE_HERE",
+  storageBucket: "PASTE_HERE",
+  messagingSenderId: "PASTE_HERE",
+  appId: "PASTE_HERE"
 };
+/* ========================================== */
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
@@ -66,12 +67,10 @@ function fmtTime(ts) {
 }
 
 /**
- * IMPORTANT FIX:
- * Use sessionStorage so each TAB gets a unique user id.
- * (localStorage is shared across tabs and caused both of your bugs)
+ * FIX: per-tab user id (prevents "all messages on right" + presence overwrite)
  */
 function getOrCreateUserId() {
-  const key = "saladchatt_uid_session_v1";
+  const key = "saladchatt_uid_session_v2";
   let id = sessionStorage.getItem(key);
   if (!id) {
     id = crypto.getRandomValues(new Uint32Array(2)).join("").slice(0, 10);
@@ -109,7 +108,60 @@ let unsubMsgs = null;
 let unsubPresence = null;
 let heartbeatTimer = null;
 
-// ---------- Presence ----------
+// ---------- Presence UI elements (created dynamically; no HTML edits needed) ----------
+let presenceUI = null;
+
+function ensurePresenceUI() {
+  if (presenceUI) return presenceUI;
+
+  // Try to attach near the top of the chat card
+  // We'll insert above messages list if possible
+  const container = msgsEl?.parentElement;
+  const wrap = document.createElement("div");
+  wrap.style.marginTop = "10px";
+  wrap.style.marginBottom = "6px";
+  wrap.style.fontSize = "12px";
+  wrap.style.color = "rgba(238,242,255,.75)";
+  wrap.style.display = "flex";
+  wrap.style.flexWrap = "wrap";
+  wrap.style.gap = "8px";
+  wrap.style.alignItems = "center";
+
+  const count = document.createElement("span");
+  count.id = "onlineCount";
+  count.textContent = "Online: 0";
+
+  const list = document.createElement("span");
+  list.id = "onlineList";
+  list.style.opacity = "0.9";
+  list.textContent = "";
+
+  wrap.appendChild(count);
+  wrap.appendChild(document.createTextNode("•"));
+  wrap.appendChild(list);
+
+  // Insert just above the messages box
+  if (container) {
+    container.insertBefore(wrap, msgsEl);
+  } else {
+    document.body.appendChild(wrap);
+  }
+
+  presenceUI = { countEl: count, listEl: list };
+  return presenceUI;
+}
+
+function renderPresenceList(presences) {
+  const ui = ensurePresenceUI();
+  const names = presences
+    .map(p => (p.nick || "Anonymous").trim() || "Anonymous")
+    .slice(0, 20);
+
+  ui.countEl.textContent = `Online: ${presences.length}`;
+  ui.listEl.textContent = names.length ? names.join(", ") : "—";
+}
+
+// ---------- Presence helpers ----------
 function presenceDoc(roomId, userId) {
   return doc(db, "rooms", roomId, "presence", userId);
 }
@@ -165,7 +217,6 @@ async function deleteSubcollection(roomId, subName) {
 }
 
 async function clearRoomIfEmpty(roomId) {
-  // check if anyone is still present
   const snap = await getDocs(query(presenceColl(roomId), limit(1)));
   if (!snap.empty) return;
 
@@ -180,7 +231,21 @@ async function clearRoomIfEmpty(roomId) {
   setHint("");
 }
 
+// ---------- System message ----------
+async function sendSystemMessage(roomId, text) {
+  await addDoc(collection(db, "rooms", roomId, "messages"), {
+    type: "system",
+    userId: "system",
+    nick: "system",
+    text,
+    reactions: {},
+    createdAt: serverTimestamp()
+  });
+}
+
 // ---------- Join / Leave ----------
+let lastPresenceMap = new Map(); // userId -> nick
+
 async function joinRoom(code) {
   const clean = (code || "").trim();
   if (!/^\d{6}$/.test(clean)) {
@@ -198,13 +263,56 @@ async function joinRoom(code) {
 
   await startPresence(clean);
 
-  // presence listener (no deletion here; just helpful if you want future UI)
+  // Presence listener: update online list + send "left" system message
   if (unsubPresence) unsubPresence();
-  unsubPresence = onSnapshot(presenceColl(clean), () => {});
+  lastPresenceMap = new Map();
 
-  // messages listener
+  unsubPresence = onSnapshot(presenceColl(clean), async (snap) => {
+    const current = [];
+    const currentMap = new Map(); // userId -> nick
+
+    snap.forEach((d) => {
+      const p = d.data();
+      current.push(p);
+      currentMap.set(d.id, p.nick || "Anonymous");
+    });
+
+    // Update UI list
+    renderPresenceList(current);
+
+    // Detect who left (present before, missing now)
+    const leftUsers = [];
+    for (const [uid, n] of lastPresenceMap.entries()) {
+      if (!currentMap.has(uid)) {
+        leftUsers.push({ uid, nick: n || "Anonymous" });
+      }
+    }
+
+    // Leader election to avoid duplicate "left" messages:
+    // leader = smallest userId currently present
+    const presentIds = Array.from(currentMap.keys()).sort();
+    const leaderId = presentIds.length ? presentIds[0] : null;
+    const iAmLeader = leaderId && leaderId === myUserId;
+
+    if (leftUsers.length && iAmLeader) {
+      for (const u of leftUsers) {
+        // don’t announce ourselves leaving (we do it in leaveRoom)
+        if (u.uid === myUserId) continue;
+        await sendSystemMessage(clean, `----- ${u.nick} left the chat -----`);
+      }
+    }
+
+    lastPresenceMap = currentMap;
+
+    // If empty, maybe clear (best-effort)
+    if (currentMap.size === 0) {
+      await clearRoomIfEmpty(clean);
+    }
+  });
+
+  // Messages listener
   const msgsRef = collection(db, "rooms", clean, "messages");
-  const qMsgs = query(msgsRef, orderBy("createdAt", "asc"), limit(250));
+  const qMsgs = query(msgsRef, orderBy("createdAt", "asc"), limit(300));
 
   if (unsubMsgs) unsubMsgs();
   clearMessagesUI();
@@ -216,6 +324,18 @@ async function joinRoom(code) {
     snap.forEach((d) => {
       const m = d.data();
       const mine = m.userId === myUserId;
+
+      // SYSTEM message
+      if (m.type === "system") {
+        const sys = document.createElement("div");
+        sys.style.textAlign = "center";
+        sys.style.fontSize = "12px";
+        sys.style.color = "rgba(238,242,255,.65)";
+        sys.style.padding = "6px 0";
+        sys.textContent = m.text || "";
+        msgsEl.appendChild(sys);
+        return;
+      }
 
       const row = document.createElement("div");
       row.className = `bubbleRow ${mine ? "me" : "them"}`;
@@ -262,7 +382,6 @@ async function joinRoom(code) {
       });
 
       bubble.appendChild(reactionsBar);
-
       row.appendChild(bubble);
       msgsEl.appendChild(row);
     });
@@ -274,21 +393,28 @@ async function joinRoom(code) {
 async function leaveRoom() {
   const roomId = currentRoomCode;
 
-  // stop listeners
+  // Stop listeners
   if (unsubMsgs) unsubMsgs();
   unsubMsgs = null;
   if (unsubPresence) unsubPresence();
   unsubPresence = null;
 
-  // stop heartbeat
+  // Stop heartbeat
   stopPresence();
 
-  // delete our presence doc
+  // Announce our leave (best effort)
+  if (roomId) {
+    try {
+      await sendSystemMessage(roomId, `----- ${safeNick()} left the chat -----`);
+    } catch {}
+  }
+
+  // Delete our presence doc
   if (roomId) {
     try { await deleteDoc(presenceDoc(roomId, myUserId)); } catch {}
   }
 
-  // clear UI
+  // Clear UI
   currentRoomCode = null;
   roomCodeEl.textContent = "—";
   clearMessagesUI();
@@ -296,8 +422,7 @@ async function leaveRoom() {
   setStatus("Not connected");
   setHint("");
 
-  // IMPORTANT FIX:
-  // Delay cleanup slightly to avoid race conditions.
+  // Delay cleanup slightly to avoid race conditions
   if (roomId) {
     setTimeout(() => clearRoomIfEmpty(roomId), 1500);
   }
@@ -311,6 +436,7 @@ async function sendText() {
   if (!text) return;
 
   msgEl.value = "";
+
   await addDoc(collection(db, "rooms", currentRoomCode, "messages"), {
     type: "text",
     userId: myUserId,
