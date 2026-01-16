@@ -42,7 +42,9 @@
         </div>
 
         <div class="hint" id="hint"></div>
-        <div class="small">Text-only to stay completely free.</div>
+        <div class="small">
+          Tip: Right-click (PC) or long-press (mobile) a message for React / Reply / Delete.
+        </div>
       </section>
 
       <section class="card chat">
@@ -51,10 +53,25 @@
         <div class="roomLine">
           <span>Code:</span> <strong id="roomCode">—</strong>
           <span class="spacer"></span>
-          <span class="meTag">You:</span> <span id="youId" class="youId">—</span>
+          <span class="meTag">You (tab id):</span> <span id="youId" class="youId">—</span>
+        </div>
+
+        <div class="presenceLine">
+          <span id="onlineCount">Online: 0</span>
+          <span class="dot">•</span>
+          <span id="onlineList">—</span>
         </div>
 
         <div id="messages" class="messages"></div>
+
+        <!-- Reply bar -->
+        <div id="replyBar" class="replyBar hidden">
+          <div class="replyMeta">
+            <div class="replyTitle">Replying to <span id="replyToName"></span></div>
+            <div class="replyPreview" id="replyPreview"></div>
+          </div>
+          <button id="cancelReplyBtn" class="btn">Cancel</button>
+        </div>
 
         <div class="composer">
           <input id="msg" class="inp" placeholder="Type a message…" disabled />
@@ -62,6 +79,18 @@
         </div>
       </section>
     </main>
+  </div>
+
+  <!-- Context menu (right click / long press) -->
+  <div id="ctxMenu" class="ctxMenu hidden" role="menu" aria-hidden="true">
+    <div class="ctxHeader" id="ctxHeader">Message</div>
+    <div class="ctxSection">
+      <div class="ctxLabel">React</div>
+      <div class="ctxReacts" id="ctxReacts"></div>
+    </div>
+    <button class="ctxBtn" id="ctxReply">Reply</button>
+    <button class="ctxBtn danger" id="ctxDelete">Delete</button>
+    <button class="ctxBtn" id="ctxClose">Close</button>
   </div>
 
   <script type="module" src="./app.js"></script>
