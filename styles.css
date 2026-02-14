@@ -370,3 +370,11 @@ body{
   border-color: rgba(255,77,109,.25);
   background: rgba(255,77,109,.10);
 }
+.game-toggle { background: #00ffff; color: #000; margin-top: 15px; width: 100%; padding: 10px; border-radius: 10px; font-weight: bold; cursor: pointer; }
+#game-area { margin-top: 20px; border-top: 2px dashed #fff200; padding-top: 20px; text-align: center; }
+#target-btn { font-size: 60px; background: none; border: none; cursor: pointer; transition: transform 0.1s; display: block; margin: 10px auto; }
+#target-btn:active { transform: scale(1.2); }
+.stats { color: #fff200; font-size: 1.2rem; margin-bottom: 10px; }
+.leaderboard { background: #0a0a0a; padding: 10px; border-radius: 10px; margin-top: 15px; border: 1px solid #ff00ff; text-align: left; }
+.leaderboard h3 { color: #ff00ff; font-size: 1rem; margin-top: 0; }
+#start-game-btn { background: #0f0; color: #000; padding: 10px; border-radius: 5px; border: none; cursor: pointer; font-weight: bold; }
