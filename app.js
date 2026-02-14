@@ -2,13 +2,13 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebas
 import { getDatabase, ref, push, set, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
 const firebaseConfig = {
-  apiKey: "INSERISCI_QUI",
+  apiKey: "AIzaSyDrZ-maG46ecU5Fgidqyrws1DdNoEfqeFI",
   authDomain: "salad-chatt.firebaseapp.com",
-  databaseURL: "https://salad-chatt-default-rtdb.firebaseio.com",
   projectId: "salad-chatt",
-  storageBucket: "salad-chatt.appspot.com",
-  messagingSenderId: "ID",
-  appId: "APP_ID"
+  storageBucket: "salad-chatt.firebasestorage.app",
+  messagingSenderId: "841208847669",
+  appId: "1:841208847669:web:568e254429166d05c2c07c",
+  measurementId: "G-FFF48MW8EL"
 };
 
 const app = initializeApp(firebaseConfig);
