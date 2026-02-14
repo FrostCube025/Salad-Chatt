@@ -13,58 +13,49 @@
         <div class="badge">🥗</div>
         <div>
           <div class="h1">Salad Chatt</div>
-          <div class="sub">Host or join a room with a 6-digit code</div>
+          <div class="sub">Permanent chats • WhatsApp-ish</div>
         </div>
       </div>
-      <div class="status" id="status">Not connected</div>
+
+      <div class="rightTop">
+        <div class="status" id="status">Loading…</div>
+        <button id="accountBtn" class="btn">Account</button>
+      </div>
     </header>
 
-    <main class="grid">
-      <section class="card">
-        <div class="cardTitle">Host / Join</div>
+    <main class="appGrid">
+      <!-- Left: chats -->
+      <section class="card leftPane">
+        <div class="cardTitle">Chats</div>
 
-        <label class="lbl">Nickname</label>
-        <input id="nick" class="inp" maxlength="20" placeholder="e.g. BobbyGamer69" />
-
-        <label class="lbl">Room code (6 digits)</label>
-        <div class="row">
-          <input id="code" class="inp" maxlength="6" inputmode="numeric" placeholder="e.g. 123456" />
-          <button id="joinBtn" class="btn primary">Join</button>
+        <div class="meBox">
+          <div><span class="muted">You:</span> <strong id="meName">—</strong></div>
+          <div><span class="muted">ID:</span> <strong id="meId" class="mono">—</strong></div>
         </div>
 
-        <div class="row">
-          <button id="hostBtn" class="btn">Host (generate)</button>
-          <button id="copyBtn" class="btn" disabled>Copy code</button>
+        <div class="newChat">
+          <label class="lbl">Start chat with ID</label>
+          <div class="row">
+            <input id="newChatId" class="inp" maxlength="10" inputmode="numeric" placeholder="Friend's 10-digit ID" />
+            <button id="startChatBtn" class="btn primary">Start</button>
+          </div>
+          <div class="hint" id="hint"></div>
         </div>
 
-        <div class="row">
-          <button id="leaveBtn" class="btn" disabled>Leave</button>
-        </div>
-
-        <div class="hint" id="hint"></div>
-        <div class="small">
-          Tip: Right-click (PC) or long-press (mobile) a message for React / Reply / Delete.
-        </div>
+        <div id="chatList" class="chatList"></div>
       </section>
 
-      <section class="card chat">
-        <div class="cardTitle">Room</div>
-
-        <div class="roomLine">
-          <span>Code:</span> <strong id="roomCode">—</strong>
+      <!-- Right: messages -->
+      <section class="card rightPane">
+        <div class="chatHeader">
+          <div class="chatTitle" id="chatTitle">Select a chat</div>
+          <div class="chatMeta" id="chatMeta">—</div>
           <span class="spacer"></span>
-          <span class="meTag">You (tab id):</span> <span id="youId" class="youId">—</span>
-        </div>
-
-        <div class="presenceLine">
-          <span id="onlineCount">Online: 0</span>
-          <span class="dot">•</span>
-          <span id="onlineList">—</span>
+          <button id="deleteChatBtn" class="btn danger" disabled>Delete chat (for me)</button>
         </div>
 
         <div id="messages" class="messages"></div>
 
-        <!-- Reply bar -->
         <div id="replyBar" class="replyBar hidden">
           <div class="replyMeta">
             <div class="replyTitle">Replying to <span id="replyToName"></span></div>
@@ -81,7 +72,7 @@
     </main>
   </div>
 
-  <!-- Context menu (right click / long press) -->
+  <!-- Context menu -->
   <div id="ctxMenu" class="ctxMenu hidden" role="menu" aria-hidden="true">
     <div class="ctxHeader" id="ctxHeader">Message</div>
     <div class="ctxSection">
