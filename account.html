@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Salad Chatt • Account</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="shell">
+    <header class="top">
+      <div class="brand">
+        <div class="badge">🥗</div>
+        <div>
+          <div class="h1">Create Account</div>
+          <div class="sub">Required before chatting</div>
+        </div>
+      </div>
+      <div class="status" id="status">Not registered</div>
+    </header>
+
+    <main class="single">
+      <section class="card">
+        <div class="cardTitle">Your Profile</div>
+
+        <label class="lbl">Name</label>
+        <input id="name" class="inp" maxlength="20" placeholder="e.g. FrostCube" />
+
+        <div class="row">
+          <button id="createBtn" class="btn primary">Create account</button>
+          <button id="backBtn" class="btn" disabled>Go to chats</button>
+        </div>
+
+        <div class="hint" id="hint"></div>
+
+        <div class="small">
+          This generates a unique 10-digit ID like a phone number. Share it with friends so they can start a chat with you.
+        </div>
+
+        <div class="profileBox hidden" id="profileBox">
+          <div class="profileLine"><span class="muted">Name:</span> <strong id="pName"></strong></div>
+          <div class="profileLine"><span class="muted">Your ID:</span> <strong id="pId" class="mono"></strong></div>
+          <div class="row">
+            <button id="copyIdBtn" class="btn">Copy ID</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
+    import { getFirestore, doc, setDoc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
+
+    /* ===== PASTE YOUR FIREBASE CONFIG HERE (same as app.js) ===== */
+    const firebaseConfig = {
+      apiKey: "PASTE_HERE",
+      authDomain: "PASTE_HERE",
+      projectId: "PASTE_HERE",
+      storageBucket: "PASTE_HERE",
+      messagingSenderId: "PASTE_HERE",
+      appId: "PASTE_HERE"
+    };
+    /* =========================================================== */
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    const el = (id) => document.getElementById(id);
+    const statusEl = el("status");
+    const hintEl = el("hint");
+    const nameEl = el("name");
+    const createBtn = el("createBtn");
+    const backBtn = el("backBtn");
+
+    const profileBox = el("profileBox");
+    const pName = el("pName");
+    const pId = el("pId");
+    const copyIdBtn = el("copyIdBtn");
+
+    function setHint(t){ hintEl.textContent = t || ""; }
+
+    function loadLocalUser(){
+      try { return JSON.parse(localStorage.getItem("salad_user_v1") || "null"); }
+      catch { return null; }
+    }
+    function saveLocalUser(u){
+      localStorage.setItem("salad_user_v1", JSON.stringify(u));
+    }
+
+    async function generateUnique10DigitId(){
+      // Try a few times (collision extremely unlikely, but we check anyway)
+      for (let i=0; i<10; i++){
+        const id = String(Math.floor(1000000000 + Math.random()*9000000000)); // 10 digits
+        const ref = doc(db, "users", id);
+        const snap = await getDoc(ref);
+        if (!snap.exists()) return id;
+      }
+      throw new Error("Could not generate a unique ID. Try again.");
+    }
+
+    function showProfile(user){
+      statusEl.textContent = "Registered";
+      profileBox.classList.remove("hidden");
+      pName.textContent = user.name;
+      pId.textContent = user.id;
+      backBtn.disabled = false;
+    }
+
+    // If already registered, show
+    const existing = loadLocalUser();
+    if (existing?.id && existing?.name){
+      showProfile(existing);
+    }
+
+    createBtn.onclick = async () => {
+      const name = (nameEl.value || "").trim().slice(0,20);
+      if (!name){
+        setHint("Please enter a name.");
+        return;
+      }
+      setHint("Creating account…");
+
+      try{
+        const id = await generateUnique10DigitId();
+        await setDoc(doc(db, "users", id), {
+          id,
+          name,
+          createdAt: serverTimestamp()
+        });
+
+        const user = { id, name };
+        saveLocalUser(user);
+        showProfile(user);
+        setHint("Account created!");
+      } catch(e){
+        console.error(e);
+        setHint("Failed to create account. Check console.");
+      }
+    };
+
+    backBtn.onclick = () => {
+      window.location.href = "./index.html";
+    };
+
+    copyIdBtn.onclick = async () => {
+      const u = loadLocalUser();
+      if (!u?.id) return;
+      await navigator.clipboard.writeText(u.id);
+      setHint("Copied your ID!");
+    };
+  </script>
+</body>
+</html>
