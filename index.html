@@ -17,17 +17,17 @@
             <button id="sendBtn">Send</button>
         </div>
 
-        <button onclick="toggleGame()" class="game-toggle">🎮 Open Game</button>
+        <button onclick="toggleGame()" class="game-btn-toggle">🎮 Play Game</button>
         
         <div id="game-area" style="display:none;">
-            <h2 class="neon-text">Salad Clicker</h2>
+            <div class="game-divider"></div>
             <div class="stats">Score: <span id="score">0</span> | Time: <span id="timer">10</span>s</div>
             <button id="target-btn">🥗</button>
-            <button onclick="startGame()" id="start-game-btn">Start Game</button>
+            <button onclick="startGame()" class="start-game-btn">Start</button>
             
-            <div class="leaderboard">
-                <h3>Top 5 Leaders</h3>
-                <div id="leader-list">Loading ranking...</div>
+            <div class="leaderboard-box">
+                <h3>🏆 Top 5</h3>
+                <div id="leader-list"></div>
             </div>
         </div>
     </div>
