@@ -5,59 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Salad Chatt • Account</title>
   <link rel="stylesheet" href="./styles.css" />
-
-  <style>
-    /* Account layout enhancements without needing a new css file */
-    .centerWrap{
-      display:grid;
-      place-items:center;
-      padding: 24px 0 8px;
-    }
-    .bigName{
-      font-size: 34px;
-      font-weight: 1000;
-      letter-spacing: .3px;
-      text-align:center;
-      margin: 4px 0;
-    }
-    .bigId{
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      font-size: 16px;
-      opacity: .9;
-      text-align:center;
-      margin-top: 6px;
-    }
-    .aboutBox{
-      margin-top: 18px;
-      padding: 12px;
-      border-radius: 14px;
-      border: 1px solid rgba(255,255,255,.12);
-      background: rgba(0,0,0,.16);
-      color: rgba(238,242,255,.78);
-      font-size: 13px;
-      line-height: 1.35;
-    }
-    .danger{
-      border-color: rgba(255,77,109,.25) !important;
-      background: rgba(255,77,109,.10) !important;
-    }
-    .danger:hover{
-      background: rgba(255,77,109,.16) !important;
-    }
-    .hidden{ display:none !important; }
-    .single{
-      display:grid;
-      place-items:center;
-    }
-    .cardWide{
-      width: min(680px, 100%);
-    }
-    .divider{
-      height:1px;
-      background: rgba(255,255,255,.10);
-      margin: 16px 0;
-    }
-  </style>
 </head>
 
 <body>
@@ -80,7 +27,7 @@
         <div id="createView" class="hidden">
           <div class="cardTitle">Create Account</div>
 
-          <label class="lbl">Name</label>
+          <label class="lbl" for="name">Name</label>
           <input id="name" class="inp" maxlength="20" placeholder="e.g. FrostCube" autocomplete="name" />
 
           <div class="row">
@@ -91,7 +38,7 @@
           <div class="hint" id="hintA"></div>
 
           <div class="small">
-            This generates a unique 10-digit ID like a phone number. Share it so friends can start a chat with you.
+            This generates a unique 10-digit ID like a phone number. Share it so friends can DM you.
           </div>
         </div>
 
@@ -101,35 +48,33 @@
 
           <div class="centerWrap">
             <div class="bigName" id="pName">—</div>
-            <div class="bigId" id="pId">—</div>
+            <div class="bigId mono" id="pId">—</div>
           </div>
 
           <div class="aboutBox">
             <strong>About</strong><br />
-            This is your Salad Chatt identity. People can start a chat with you using your 10-digit ID.
-            Your chats are permanent until you delete them.
+            This is your Salad Chatt identity. Chats are permanent until you delete them.
           </div>
 
           <div class="divider"></div>
 
-          <!-- VIEW MODE BUTTONS -->
-          <div id="viewButtons">
-            <div class="row">
-              <button id="copyIdBtn" class="btn">Copy ID</button>
-              <button id="editBtn" class="btn primary">Modify name</button>
-              <button id="goChatsBtnB" class="btn">Go to chats</button>
-            </div>
-
-            <div class="row">
-              <button id="deleteBtn" class="btn danger">Delete account</button>
-            </div>
-
-            <div class="hint" id="hintB"></div>
+          <div class="row">
+            <button id="copyIdBtn" class="btn">Copy ID</button>
+            <button id="editBtn" class="btn primary">Modify name</button>
+            <button id="goChatsBtnB" class="btn">Go to chats</button>
           </div>
+
+          <div class="row">
+            <button id="deleteBtn" class="btn danger">Delete account</button>
+          </div>
+
+          <div class="hint" id="hintB"></div>
 
           <!-- EDIT MODE -->
           <div id="editView" class="hidden">
-            <label class="lbl">New name</label>
+            <div class="divider"></div>
+
+            <label class="lbl" for="newName">New name</label>
             <input id="newName" class="inp" maxlength="20" placeholder="Enter new name" autocomplete="name" />
 
             <div class="row">
@@ -150,15 +95,13 @@
 
     /* ===== PASTE YOUR FIREBASE CONFIG HERE (same as app.js) ===== */
     const firebaseConfig = {
-  apiKey: "AIzaSyDrZ-maG46ecU5Fgidqyrws1DdNoEfqeFI",
-  authDomain: "salad-chatt.firebaseapp.com",
-  projectId: "salad-chatt",
-  storageBucket: "salad-chatt.firebasestorage.app",
-  messagingSenderId: "841208847669",
-  appId: "1:841208847669:web:568e254429166d05c2c07c",
-  measurementId: "G-FFF48MW8EL"
-};
-
+      apiKey: "PASTE_HERE",
+      authDomain: "PASTE_HERE",
+      projectId: "PASTE_HERE",
+      storageBucket: "PASTE_HERE",
+      messagingSenderId: "PASTE_HERE",
+      appId: "PASTE_HERE"
+    };
     /* =========================================================== */
 
     const app = initializeApp(firebaseConfig);
@@ -167,7 +110,6 @@
     const el = (id) => document.getElementById(id);
 
     const statusEl = el("status");
-
     const createView = el("createView");
     const profileView = el("profileView");
     const editView = el("editView");
@@ -244,12 +186,10 @@
       newNameEl.focus();
     }
 
-    // Initial view
     let user = loadLocalUser();
     if (user?.id && user?.name) showProfile(user);
     else showCreate();
 
-    // Create account
     createBtn.onclick = async () => {
       const name = (nameEl.value || "").trim().slice(0,20);
       if (!name){
@@ -261,9 +201,7 @@
       try{
         const id = await generateUnique10DigitId();
         await setDoc(doc(db, "users", id), {
-          id,
-          name,
-          createdAt: serverTimestamp()
+          id, name, createdAt: serverTimestamp()
         });
 
         user = { id, name };
@@ -276,22 +214,16 @@
       }
     };
 
-    // Go to chats buttons
     goChatsBtnA.onclick = () => window.location.href = "./index.html";
     goChatsBtnB.onclick = () => window.location.href = "./index.html";
 
-    // Copy ID
     copyIdBtn.onclick = async () => {
       if (!user?.id) return;
       await navigator.clipboard.writeText(user.id);
       setHint(hintB, "Copied your ID!");
     };
 
-    // Edit name
-    editBtn.onclick = () => {
-      if (!user) return;
-      showEdit(user);
-    };
+    editBtn.onclick = () => { if (user) showEdit(user); };
 
     cancelEditBtn.onclick = () => {
       editView.classList.add("hidden");
@@ -318,25 +250,19 @@
       }
     };
 
-    // Delete account
     deleteBtn.onclick = async () => {
       if (!user?.id) return;
-
-      const ok = confirm("Delete your account? This removes your profile from the database and signs you out on this device.");
+      const ok = confirm("Delete your account? This removes your profile and signs you out on this device.");
       if (!ok) return;
 
       setHint(hintB, "Deleting account…");
-      try{
-        await deleteDoc(doc(db, "users", user.id));
-      } catch(e){
-        // Even if delete fails, still clear locally to “sign out”
-        console.warn("Delete user doc failed:", e);
-      }
+      try { await deleteDoc(doc(db, "users", user.id)); }
+      catch(e){ console.warn("Delete user doc failed:", e); }
 
       clearLocalUser();
       user = null;
       showCreate();
-      setHint(hintA, "Account deleted. Create a new one if you want to use Salad Chatt again.");
+      setHint(hintA, "Account deleted. Create a new one to use Salad Chatt again.");
     };
   </script>
 </body>
