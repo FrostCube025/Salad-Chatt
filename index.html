@@ -24,7 +24,6 @@
     </header>
 
     <main class="appGrid">
-      <!-- Left: chats -->
       <section class="card leftPane">
         <div class="cardTitle">Chats</div>
 
@@ -34,7 +33,7 @@
         </div>
 
         <div class="newChat">
-          <label class="lbl">Start chat with ID</label>
+          <label class="lbl" for="newChatId">Start chat with ID</label>
           <div class="row">
             <input id="newChatId" class="inp" maxlength="10" inputmode="numeric" placeholder="Friend's 10-digit ID" />
             <button id="startChatBtn" class="btn primary">Start</button>
@@ -45,7 +44,6 @@
         <div id="chatList" class="chatList"></div>
       </section>
 
-      <!-- Right: messages -->
       <section class="card rightPane">
         <div class="chatHeader">
           <div class="chatTitle" id="chatTitle">Select a chat</div>
@@ -70,6 +68,34 @@
         </div>
       </section>
     </main>
+  </div>
+
+  <!-- Profile Modal -->
+  <div id="profileModal" class="modal hidden" aria-hidden="true">
+    <div class="modalBackdrop" id="profileBackdrop"></div>
+    <div class="modalCard" role="dialog" aria-modal="true">
+      <div class="modalHeader">
+        <div>
+          <div class="modalTitle" id="profileName">—</div>
+          <div class="modalSub mono" id="profileId">—</div>
+        </div>
+        <button class="btn" id="profileCloseBtn">Close</button>
+      </div>
+
+      <div class="modalBody">
+        <div class="aboutBox">
+          <strong>About</strong><br />
+          This is a Salad Chatt profile. Use the ID to start a chat.
+        </div>
+
+        <div class="row">
+          <button class="btn primary" id="profileCopyBtn">Copy ID</button>
+          <button class="btn" id="profileStartDmBtn">Start chat</button>
+        </div>
+
+        <div class="hint" id="profileHint"></div>
+      </div>
+    </div>
   </div>
 
   <!-- Context menu -->
