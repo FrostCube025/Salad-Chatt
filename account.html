@@ -53,7 +53,7 @@
 
           <div class="aboutBox">
             <strong>About</strong><br />
-            This is your Salad Chatt identity. Chats are permanent until you delete them.
+            <div id="aboutText" style="margin-top:6px;">—</div>
           </div>
 
           <div class="divider"></div>
@@ -61,6 +61,7 @@
           <div class="row">
             <button id="copyIdBtn" class="btn">Copy ID</button>
             <button id="editBtn" class="btn primary">Modify name</button>
+            <button id="editAboutBtn" class="btn">Modify about</button>
             <button id="goChatsBtnB" class="btn">Go to chats</button>
           </div>
 
@@ -70,7 +71,7 @@
 
           <div class="hint" id="hintB"></div>
 
-          <!-- EDIT MODE -->
+          <!-- EDIT NAME -->
           <div id="editView" class="hidden">
             <div class="divider"></div>
 
@@ -84,6 +85,22 @@
 
             <div class="hint" id="hintC"></div>
           </div>
+
+          <!-- EDIT ABOUT -->
+          <div id="aboutEditView" class="hidden">
+            <div class="divider"></div>
+
+            <label class="lbl" for="newAbout">About (max 160)</label>
+            <textarea id="newAbout" class="inp" rows="4" maxlength="160"
+              placeholder="Write a short description (max 160 characters)"></textarea>
+
+            <div class="row">
+              <button id="saveAboutBtn" class="btn primary">Save</button>
+              <button id="cancelAboutBtn" class="btn">Cancel</button>
+            </div>
+
+            <div class="hint" id="hintD"></div>
+          </div>
         </div>
       </section>
     </main>
@@ -95,15 +112,13 @@
 
     /* ===== PASTE YOUR FIREBASE CONFIG HERE (same as app.js) ===== */
     const firebaseConfig = {
-  apiKey: "AIzaSyDrZ-maG46ecU5Fgidqyrws1DdNoEfqeFI",
-  authDomain: "salad-chatt.firebaseapp.com",
-  projectId: "salad-chatt",
-  storageBucket: "salad-chatt.firebasestorage.app",
-  messagingSenderId: "841208847669",
-  appId: "1:841208847669:web:568e254429166d05c2c07c",
-  measurementId: "G-FFF48MW8EL"
-};
-
+      apiKey: "PASTE_HERE",
+      authDomain: "PASTE_HERE",
+      projectId: "PASTE_HERE",
+      storageBucket: "PASTE_HERE",
+      messagingSenderId: "PASTE_HERE",
+      appId: "PASTE_HERE"
+    };
     /* =========================================================== */
 
     const app = initializeApp(firebaseConfig);
@@ -115,10 +130,12 @@
     const createView = el("createView");
     const profileView = el("profileView");
     const editView = el("editView");
+    const aboutEditView = el("aboutEditView");
 
     const hintA = el("hintA");
     const hintB = el("hintB");
     const hintC = el("hintC");
+    const hintD = el("hintD");
 
     const nameEl = el("name");
     const createBtn = el("createBtn");
@@ -126,15 +143,21 @@
 
     const pName = el("pName");
     const pId = el("pId");
+    const aboutTextEl = el("aboutText");
 
     const copyIdBtn = el("copyIdBtn");
     const editBtn = el("editBtn");
+    const editAboutBtn = el("editAboutBtn");
     const goChatsBtnB = el("goChatsBtnB");
     const deleteBtn = el("deleteBtn");
 
     const newNameEl = el("newName");
     const saveNameBtn = el("saveNameBtn");
     const cancelEditBtn = el("cancelEditBtn");
+
+    const newAboutEl = el("newAbout");
+    const saveAboutBtn = el("saveAboutBtn");
+    const cancelAboutBtn = el("cancelAboutBtn");
 
     function setHint(node, t){ node.textContent = t || ""; }
 
@@ -164,6 +187,7 @@
       createView.classList.remove("hidden");
       profileView.classList.add("hidden");
       editView.classList.add("hidden");
+      aboutEditView.classList.add("hidden");
       goChatsBtnA.disabled = true;
       setHint(hintA, "");
     }
@@ -173,99 +197,144 @@
       createView.classList.add("hidden");
       profileView.classList.remove("hidden");
       editView.classList.add("hidden");
+      aboutEditView.classList.add("hidden");
 
       pName.textContent = user.name;
       pId.textContent = user.id;
+      aboutTextEl.textContent = (user.about && user.about.trim()) ? user.about : "No description yet.";
 
       goChatsBtnA.disabled = false;
       setHint(hintB, "");
       setHint(hintC, "");
+      setHint(hintD, "");
     }
 
-    function showEdit(user){
+    function showEditName(user){
       editView.classList.remove("hidden");
       newNameEl.value = user.name || "";
       newNameEl.focus();
     }
 
-    let user = loadLocalUser();
-    if (user?.id && user?.name) showProfile(user);
-    else showCreate();
+    function showEditAbout(user){
+      aboutEditView.classList.remove("hidden");
+      newAboutEl.value = user.about || "";
+      newAboutEl.focus();
+    }
 
-    createBtn.onclick = async () => {
-      const name = (nameEl.value || "").trim().slice(0,20);
-      if (!name){
-        setHint(hintA, "Please enter a name.");
-        return;
-      }
-      setHint(hintA, "Creating account…");
+    // Wrap in async so we can refresh profile from Firestore
+    (async () => {
+      let user = loadLocalUser();
 
-      try{
-        const id = await generateUnique10DigitId();
-        await setDoc(doc(db, "users", id), {
-          id, name, createdAt: serverTimestamp()
-        });
-
-        user = { id, name };
-        saveLocalUser(user);
+      if (user?.id && user?.name) {
+        // Refresh from Firestore (keeps About in sync)
+        try{
+          const snap = await getDoc(doc(db, "users", user.id));
+          if (snap.exists()){
+            const u = snap.data();
+            user.name = u.name || user.name;
+            user.about = u.about || "";
+            saveLocalUser(user);
+          }
+        } catch {}
         showProfile(user);
-        setHint(hintB, "Account created!");
-      } catch(e){
-        console.error(e);
-        setHint(hintA, "Failed to create account. Check console.");
+      } else {
+        showCreate();
       }
-    };
 
-    goChatsBtnA.onclick = () => window.location.href = "./index.html";
-    goChatsBtnB.onclick = () => window.location.href = "./index.html";
+      createBtn.onclick = async () => {
+        const name = (nameEl.value || "").trim().slice(0,20);
+        if (!name){
+          setHint(hintA, "Please enter a name.");
+          return;
+        }
+        setHint(hintA, "Creating account…");
 
-    copyIdBtn.onclick = async () => {
-      if (!user?.id) return;
-      await navigator.clipboard.writeText(user.id);
-      setHint(hintB, "Copied your ID!");
-    };
+        try{
+          const id = await generateUnique10DigitId();
+          await setDoc(doc(db, "users", id), {
+            id,
+            name,
+            about: "",
+            createdAt: serverTimestamp()
+          });
 
-    editBtn.onclick = () => { if (user) showEdit(user); };
+          user = { id, name, about: "" };
+          saveLocalUser(user);
+          showProfile(user);
+          setHint(hintB, "Account created!");
+        } catch(e){
+          console.error(e);
+          setHint(hintA, "Failed to create account. Check console.");
+        }
+      };
 
-    cancelEditBtn.onclick = () => {
-      editView.classList.add("hidden");
-      setHint(hintC, "");
-    };
+      goChatsBtnA.onclick = () => window.location.href = "./index.html";
+      goChatsBtnB.onclick = () => window.location.href = "./index.html";
 
-    saveNameBtn.onclick = async () => {
-      const newName = (newNameEl.value || "").trim().slice(0,20);
-      if (!newName){
-        setHint(hintC, "Name cannot be empty.");
-        return;
-      }
-      setHint(hintC, "Saving…");
+      copyIdBtn.onclick = async () => {
+        if (!user?.id) return;
+        await navigator.clipboard.writeText(user.id);
+        setHint(hintB, "Copied your ID!");
+      };
 
-      try{
-        await updateDoc(doc(db, "users", user.id), { name: newName });
-        user.name = newName;
-        saveLocalUser(user);
-        showProfile(user);
-        setHint(hintB, "Name updated!");
-      } catch(e){
-        console.error(e);
-        setHint(hintC, "Failed to update name. Check console.");
-      }
-    };
+      editBtn.onclick = () => { if (user) showEditName(user); };
+      cancelEditBtn.onclick = () => { editView.classList.add("hidden"); setHint(hintC, ""); };
 
-    deleteBtn.onclick = async () => {
-      if (!user?.id) return;
-      const ok = confirm("Delete your account? This removes your profile and signs you out on this device.");
-      if (!ok) return;
+      saveNameBtn.onclick = async () => {
+        const newName = (newNameEl.value || "").trim().slice(0,20);
+        if (!newName){
+          setHint(hintC, "Name cannot be empty.");
+          return;
+        }
+        setHint(hintC, "Saving…");
 
-      setHint(hintB, "Deleting account…");
-      try { await deleteDoc(doc(db, "users", user.id)); }
-      catch(e){ console.warn("Delete user doc failed:", e); }
+        try{
+          await updateDoc(doc(db, "users", user.id), { name: newName });
+          user.name = newName;
+          saveLocalUser(user);
+          showProfile(user);
+          setHint(hintB, "Name updated!");
+        } catch(e){
+          console.error(e);
+          setHint(hintC, "Failed to update name. Check console.");
+        }
+      };
 
-      clearLocalUser();
-      user = null;
-      showCreate();
-      setHint(hintA, "Account deleted. Create a new one to use Salad Chatt again.");
-    };
+      editAboutBtn.onclick = () => { if (user) showEditAbout(user); };
+      cancelAboutBtn.onclick = () => { aboutEditView.classList.add("hidden"); setHint(hintD, ""); };
+
+      saveAboutBtn.onclick = async () => {
+        const about = (newAboutEl.value || "").trim().slice(0,160);
+        setHint(hintD, "Saving…");
+
+        try{
+          await updateDoc(doc(db, "users", user.id), { about });
+          user.about = about;
+          saveLocalUser(user);
+          showProfile(user);
+          setHint(hintB, "About updated!");
+        } catch(e){
+          console.error(e);
+          setHint(hintD, "Failed to update About. Check console.");
+        }
+      };
+
+      deleteBtn.onclick = async () => {
+        if (!user?.id) return;
+
+        const ok = confirm("Delete your account? This removes your profile and signs you out on this device.");
+        if (!ok) return;
+
+        setHint(hintB, "Deleting account…");
+        try { await deleteDoc(doc(db, "users", user.id)); }
+        catch(e){ console.warn("Delete user doc failed:", e); }
+
+        clearLocalUser();
+        user = null;
+        showCreate();
+        setHint(hintA, "Account deleted. Create a new one to use Salad Chatt again.");
+      };
+    })();
   </script>
 </body>
 </html>
