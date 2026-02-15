@@ -26,6 +26,7 @@ const firebaseConfig = {
   appId: "1:841208847669:web:568e254429166d05c2c07c",
   measurementId: "G-FFF48MW8EL"
 };
+
 /* ================================================================= */
 
 const app = initializeApp(firebaseConfig);
@@ -58,7 +59,17 @@ const replyToNameEl = el("replyToName");
 const replyPreviewEl = el("replyPreview");
 const cancelReplyBtn = el("cancelReplyBtn");
 
-// context menu
+// Profile modal
+const profileModal = el("profileModal");
+const profileBackdrop = el("profileBackdrop");
+const profileCloseBtn = el("profileCloseBtn");
+const profileNameEl = el("profileName");
+const profileIdEl = el("profileId");
+const profileCopyBtn = el("profileCopyBtn");
+const profileStartDmBtn = el("profileStartDmBtn");
+const profileHintEl = el("profileHint");
+
+// Context menu
 const ctxMenu = el("ctxMenu");
 const ctxHeader = el("ctxHeader");
 const ctxReacts = el("ctxReacts");
@@ -68,6 +79,7 @@ const ctxClose = el("ctxClose");
 
 function setHint(t){ hintEl.textContent = t || ""; }
 function setStatus(t){ statusEl.textContent = t || ""; }
+function setProfileHint(t){ profileHintEl.textContent = t || ""; }
 
 function loadLocalUser(){
   try { return JSON.parse(localStorage.getItem("salad_user_v1") || "null"); }
@@ -76,7 +88,6 @@ function loadLocalUser(){
 
 const user = loadLocalUser();
 if (!user?.id || !user?.name){
-  // block access until account created
   window.location.replace("./account.html");
 }
 
@@ -88,35 +99,27 @@ meIdEl.textContent = myId;
 
 accountBtn.onclick = () => window.location.href = "./account.html";
 
-// reactions
 const REACTIONS = ["👍","😂","❤️","🔥"];
 
-// current chat state
 let currentChatId = null;
-let currentChat = null; // chat doc data
 let unsubChatList = null;
 let unsubMessages = null;
 
-// reply state
 let replyTarget = null; // {id, nick, preview}
+let ctxTarget = null;   // {chatId,msgId,nick,preview}
 
-// context menu target
-let ctxTarget = null; // {chatId,msgId,nick,preview}
-
-// ---------- Helpers ----------
 function isNearBottom(container){
   return container.scrollHeight - container.scrollTop - container.clientHeight < 140;
 }
 function scrollToBottom(container){
   container.scrollTop = container.scrollHeight;
 }
-
 function fmtTime(ts){
   const d = ts?.toDate ? ts.toDate() : null;
   return d ? d.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" }) : "";
 }
 
-// Format code blocks and inline code
+// code formatting
 function renderFormattedText(container, rawText){
   const text = rawText ?? "";
   const parts = text.split("```");
@@ -144,20 +147,69 @@ function renderFormattedText(container, rawText){
   });
 }
 
-// deterministic DM chatId
 function dmChatId(a,b){
   const [x,y] = [a,b].sort();
   return `dm_${x}_${y}`;
 }
 
-// ---------- Chat list ----------
 async function ensureUserExists(userId){
   const snap = await getDoc(doc(db, "users", userId));
   return snap.exists() ? snap.data() : null;
 }
 
+// -------- Profile modal --------
+async function openProfile(userId){
+  setProfileHint("");
+  profileModal.classList.remove("hidden");
+  profileModal.setAttribute("aria-hidden","false");
+
+  profileNameEl.textContent = "Loading…";
+  profileIdEl.textContent = userId;
+
+  try{
+    const snap = await getDoc(doc(db, "users", userId));
+    if (!snap.exists()){
+      profileNameEl.textContent = "Unknown user";
+      setProfileHint("This user does not exist (or was deleted).");
+      return;
+    }
+    const u = snap.data();
+    profileNameEl.textContent = u.name || "Unknown";
+    profileIdEl.textContent = u.id || userId;
+  } catch(e){
+    console.error(e);
+    profileNameEl.textContent = "Error";
+    setProfileHint("Failed to load profile.");
+  }
+
+  profileCopyBtn.onclick = async () => {
+    await navigator.clipboard.writeText(userId);
+    setProfileHint("Copied ID!");
+  };
+
+  profileStartDmBtn.onclick = async () => {
+    if (!/^\d{10}$/.test(userId)) return;
+    newChatIdEl.value = userId;
+    setProfileHint("Starting chat…");
+    await startChatBtn.onclick();
+    closeProfile();
+  };
+}
+
+function closeProfile(){
+  profileModal.classList.add("hidden");
+  profileModal.setAttribute("aria-hidden","true");
+  setProfileHint("");
+}
+
+profileCloseBtn.onclick = closeProfile;
+profileBackdrop.onclick = closeProfile;
+document.addEventListener("keydown",(e)=>{
+  if(e.key==="Escape" && !profileModal.classList.contains("hidden")) closeProfile();
+});
+
+// -------- Chat list --------
 function renderChatItem(chatId, chat){
-  // Skip chats user deleted for themselves
   const hiddenFor = chat.hiddenFor || [];
   if (hiddenFor.includes(myId)) return null;
 
@@ -168,7 +220,6 @@ function renderChatItem(chatId, chat){
   const title = document.createElement("div");
   title.className = "title";
 
-  // DM title = other person's name (or id)
   let display = chat.title || "Chat";
   if (chat.type === "dm"){
     const other = (chat.members || []).find(m => m !== myId) || "Unknown";
@@ -182,7 +233,6 @@ function renderChatItem(chatId, chat){
 
   div.appendChild(title);
   div.appendChild(sub);
-
   div.onclick = () => openChat(chatId);
 
   return div;
@@ -203,11 +253,10 @@ function subscribeChatList(){
   });
 }
 
-// ---------- Open chat ----------
+// -------- Open chat --------
 async function openChat(chatId){
   currentChatId = chatId;
 
-  // update active highlight
   Array.from(chatListEl.querySelectorAll(".chatItem")).forEach(n => {
     n.classList.toggle("active", n.dataset.chatId === chatId);
   });
@@ -215,17 +264,16 @@ async function openChat(chatId){
   const chatSnap = await getDoc(doc(db,"chats",chatId));
   if (!chatSnap.exists()) return;
 
-  currentChat = chatSnap.data();
+  const chat = chatSnap.data();
 
-  // header info
-  if (currentChat.type === "dm"){
-    const other = (currentChat.members || []).find(m => m !== myId) || "Unknown";
-    const name = currentChat.memberNames?.[other] || other;
+  if (chat.type === "dm"){
+    const other = (chat.members || []).find(m => m !== myId) || "Unknown";
+    const name = chat.memberNames?.[other] || other;
     chatTitleEl.textContent = name;
     chatMetaEl.textContent = `DM • ${other}`;
   } else {
-    chatTitleEl.textContent = currentChat.title || "Group";
-    chatMetaEl.textContent = `Group • ${(currentChat.members||[]).length} members`;
+    chatTitleEl.textContent = chat.title || "Group";
+    chatMetaEl.textContent = `Group • ${(chat.members||[]).length} members`;
   }
 
   deleteChatBtn.disabled = false;
@@ -237,7 +285,6 @@ async function openChat(chatId){
 
 function subscribeMessages(chatId){
   if (unsubMessages) unsubMessages();
-
   msgsEl.innerHTML = "";
 
   const msgsRef = collection(db, "chats", chatId, "messages");
@@ -256,39 +303,34 @@ function subscribeMessages(chatId){
 
       const bubble = document.createElement("div");
       bubble.className = "bubble";
-
-      // data for context menu
       bubble.dataset.msgId = d.id;
       bubble.dataset.nick = m.senderName || "Unknown";
-      bubble.dataset.preview = (m.deleted ? "Message deleted" : (m.text || "")).slice(0, 140);
+      bubble.dataset.preview = (m.deleted ? "Message deleted" : (m.text || "")).slice(0,140);
 
       attachContextHandlers(bubble, chatId, d.id);
 
       const name = document.createElement("div");
-      name.className = "name";
+      name.className = "name profileLink";
       name.textContent = m.senderName || "Unknown";
+      name.onclick = () => openProfile(m.senderId);
       bubble.appendChild(name);
 
       if (m.replyTo && m.replyTo.nick) {
         const chip = document.createElement("div");
         chip.className = "replyChip";
-
         const rn = document.createElement("div");
         rn.className = "replyNick";
         rn.textContent = `Replying to ${m.replyTo.nick}`;
-        chip.appendChild(rn);
-
         const rt = document.createElement("div");
         rt.className = "replyText";
         rt.textContent = m.replyTo.preview || "";
+        chip.appendChild(rn);
         chip.appendChild(rt);
-
         bubble.appendChild(chip);
       }
 
       const body = document.createElement("div");
       body.className = "text";
-
       if (m.deleted) {
         body.style.opacity = "0.75";
         body.style.fontStyle = "italic";
@@ -298,7 +340,6 @@ function subscribeMessages(chatId){
       }
       bubble.appendChild(body);
 
-      // reactions summary (counts only)
       const counts = m.reactions || {};
       const pills = Object.entries(counts).filter(([,c])=>Number(c)>0).map(([e,c])=>`${e} ${c}`).join("  ");
       if (pills){
@@ -323,7 +364,7 @@ function subscribeMessages(chatId){
   });
 }
 
-// ---------- Start DM ----------
+// -------- Start DM --------
 startChatBtn.onclick = async () => {
   const otherId = (newChatIdEl.value || "").trim();
   if (!/^\d{10}$/.test(otherId)){
@@ -345,22 +386,18 @@ startChatBtn.onclick = async () => {
   const chatId = dmChatId(myId, otherId);
   const chatRef = doc(db, "chats", chatId);
 
-  // Create chat if not exists
   const existing = await getDoc(chatRef);
   if (!existing.exists()){
     await setDoc(chatRef, {
       type: "dm",
       members: [myId, otherId],
-      memberNames: {
-        [myId]: myName,
-        [otherId]: otherUser.name
-      },
+      memberNames: { [myId]: myName, [otherId]: otherUser.name },
       createdAt: serverTimestamp(),
       lastMessageAt: serverTimestamp(),
-      lastPreview: "Chat created"
+      lastPreview: "Chat created",
+      hiddenFor: []
     });
   } else {
-    // update names (in case someone changed name later)
     await updateDoc(chatRef, {
       [`memberNames.${myId}`]: myName,
       [`memberNames.${otherId}`]: otherUser.name
@@ -372,7 +409,7 @@ startChatBtn.onclick = async () => {
   await openChat(chatId);
 };
 
-// ---------- Send message ----------
+// -------- Reply UI --------
 function showReply(target){
   replyTarget = target;
   replyBar.classList.remove("hidden");
@@ -388,6 +425,7 @@ function hideReply(){
 }
 cancelReplyBtn.onclick = () => hideReply();
 
+// -------- Send message --------
 sendBtn.onclick = async () => {
   if (!currentChatId) return;
   const text = (msgEl.value || "").trim();
@@ -405,28 +443,23 @@ sendBtn.onclick = async () => {
   };
 
   if (replyTarget){
-    payload.replyTo = {
-      id: replyTarget.id,
-      nick: replyTarget.nick,
-      preview: replyTarget.preview
-    };
+    payload.replyTo = { id: replyTarget.id, nick: replyTarget.nick, preview: replyTarget.preview };
     hideReply();
   }
 
   await addDoc(collection(db, "chats", currentChatId, "messages"), payload);
 
-  // update chat preview
   await updateDoc(doc(db, "chats", currentChatId), {
     lastMessageAt: serverTimestamp(),
     lastPreview: text.slice(0, 80)
   });
 };
 
-msgEl.addEventListener("keydown", (e) => {
+msgEl.addEventListener("keydown",(e)=>{
   if (e.key === "Enter") sendBtn.click();
 });
 
-// ---------- Delete chat (for me only) ----------
+// -------- Delete chat for me --------
 deleteChatBtn.onclick = async () => {
   if (!currentChatId) return;
   const ref = doc(db, "chats", currentChatId);
@@ -439,9 +472,7 @@ deleteChatBtn.onclick = async () => {
 
   await updateDoc(ref, { hiddenFor: Array.from(hiddenFor) });
 
-  // UI reset
   currentChatId = null;
-  currentChat = null;
   chatTitleEl.textContent = "Select a chat";
   chatMetaEl.textContent = "—";
   deleteChatBtn.disabled = true;
@@ -450,7 +481,7 @@ deleteChatBtn.onclick = async () => {
   msgsEl.innerHTML = "";
 };
 
-// ---------- Context menu / react / reply / delete message ----------
+// -------- Context menu (React / Reply / Delete) --------
 function closeCtxMenu(){
   ctxMenu.classList.add("hidden");
   ctxMenu.setAttribute("aria-hidden","true");
@@ -459,11 +490,11 @@ function closeCtxMenu(){
 function openCtxMenuAt(x,y,node,chatId,msgId){
   const nick = node.dataset.nick || "Unknown";
   const preview = (node.dataset.preview || "").slice(0,160).replace(/\s+/g," ").trim();
-
   ctxTarget = { chatId, msgId, nick, preview };
-  ctxHeader.textContent = `Message • ${nick}`;
 
+  ctxHeader.textContent = `Message • ${nick}`;
   ctxReacts.innerHTML = "";
+
   REACTIONS.forEach((emoji) => {
     const b = document.createElement("button");
     b.className = "ctxEmoji";
@@ -478,7 +509,6 @@ function openCtxMenuAt(x,y,node,chatId,msgId){
 
   ctxMenu.classList.remove("hidden");
 
-  // clamp
   const vw = window.innerWidth, vh = window.innerHeight, pad = 10;
   ctxMenu.style.left = "0px"; ctxMenu.style.top = "0px";
   const rect = ctxMenu.getBoundingClientRect();
@@ -551,14 +581,10 @@ async function reactToMessage(chatId, msgId, emoji){
 
 async function softDeleteMessage(chatId, msgId){
   const msgRef = doc(db, "chats", chatId, "messages", msgId);
-  await updateDoc(msgRef, {
-    deleted: true,
-    text: "",
-    deletedAt: serverTimestamp()
-  });
+  await updateDoc(msgRef, { deleted: true, text: "", deletedAt: serverTimestamp() });
 }
 
-// ---------- Init ----------
+// -------- Init --------
 setStatus("Ready");
 subscribeChatList();
 msgEl.disabled = true;
