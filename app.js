@@ -7,7 +7,6 @@ import {
   addDoc,
   updateDoc,
   getDoc,
-  getDocs,
   serverTimestamp,
   query,
   where,
@@ -18,15 +17,13 @@ import {
 
 /* ===== PASTE YOUR FIREBASE CONFIG HERE (same as account.html) ===== */
 const firebaseConfig = {
-  apiKey: "AIzaSyDrZ-maG46ecU5Fgidqyrws1DdNoEfqeFI",
-  authDomain: "salad-chatt.firebaseapp.com",
-  projectId: "salad-chatt",
-  storageBucket: "salad-chatt.firebasestorage.app",
-  messagingSenderId: "841208847669",
-  appId: "1:841208847669:web:568e254429166d05c2c07c",
-  measurementId: "G-FFF48MW8EL"
+  apiKey: "PASTE_HERE",
+  authDomain: "PASTE_HERE",
+  projectId: "PASTE_HERE",
+  storageBucket: "PASTE_HERE",
+  messagingSenderId: "PASTE_HERE",
+  appId: "PASTE_HERE"
 };
-
 /* ================================================================= */
 
 const app = initializeApp(firebaseConfig);
@@ -65,6 +62,7 @@ const profileBackdrop = el("profileBackdrop");
 const profileCloseBtn = el("profileCloseBtn");
 const profileNameEl = el("profileName");
 const profileIdEl = el("profileId");
+const profileAboutEl = el("profileAbout");
 const profileCopyBtn = el("profileCopyBtn");
 const profileStartDmBtn = el("profileStartDmBtn");
 const profileHintEl = el("profileHint");
@@ -105,8 +103,8 @@ let currentChatId = null;
 let unsubChatList = null;
 let unsubMessages = null;
 
-let replyTarget = null; // {id, nick, preview}
-let ctxTarget = null;   // {chatId,msgId,nick,preview}
+let replyTarget = null;
+let ctxTarget = null;
 
 function isNearBottom(container){
   return container.scrollHeight - container.scrollTop - container.clientHeight < 140;
@@ -157,7 +155,7 @@ async function ensureUserExists(userId){
   return snap.exists() ? snap.data() : null;
 }
 
-// -------- Profile modal --------
+// Profile modal
 async function openProfile(userId){
   setProfileHint("");
   profileModal.classList.remove("hidden");
@@ -165,20 +163,24 @@ async function openProfile(userId){
 
   profileNameEl.textContent = "Loading…";
   profileIdEl.textContent = userId;
+  profileAboutEl.textContent = "—";
 
   try{
     const snap = await getDoc(doc(db, "users", userId));
     if (!snap.exists()){
       profileNameEl.textContent = "Unknown user";
+      profileAboutEl.textContent = "No description.";
       setProfileHint("This user does not exist (or was deleted).");
       return;
     }
     const u = snap.data();
     profileNameEl.textContent = u.name || "Unknown";
     profileIdEl.textContent = u.id || userId;
+    profileAboutEl.textContent = (u.about && u.about.trim()) ? u.about : "No description yet.";
   } catch(e){
     console.error(e);
     profileNameEl.textContent = "Error";
+    profileAboutEl.textContent = "—";
     setProfileHint("Failed to load profile.");
   }
 
@@ -208,7 +210,7 @@ document.addEventListener("keydown",(e)=>{
   if(e.key==="Escape" && !profileModal.classList.contains("hidden")) closeProfile();
 });
 
-// -------- Chat list --------
+// Chat list
 function renderChatItem(chatId, chat){
   const hiddenFor = chat.hiddenFor || [];
   if (hiddenFor.includes(myId)) return null;
@@ -233,8 +235,8 @@ function renderChatItem(chatId, chat){
 
   div.appendChild(title);
   div.appendChild(sub);
-  div.onclick = () => openChat(chatId);
 
+  div.onclick = () => openChat(chatId);
   return div;
 }
 
@@ -253,7 +255,6 @@ function subscribeChatList(){
   });
 }
 
-// -------- Open chat --------
 async function openChat(chatId){
   currentChatId = chatId;
 
@@ -364,7 +365,6 @@ function subscribeMessages(chatId){
   });
 }
 
-// -------- Start DM --------
 startChatBtn.onclick = async () => {
   const otherId = (newChatIdEl.value || "").trim();
   if (!/^\d{10}$/.test(otherId)){
@@ -409,7 +409,7 @@ startChatBtn.onclick = async () => {
   await openChat(chatId);
 };
 
-// -------- Reply UI --------
+// Reply UI
 function showReply(target){
   replyTarget = target;
   replyBar.classList.remove("hidden");
@@ -425,7 +425,6 @@ function hideReply(){
 }
 cancelReplyBtn.onclick = () => hideReply();
 
-// -------- Send message --------
 sendBtn.onclick = async () => {
   if (!currentChatId) return;
   const text = (msgEl.value || "").trim();
@@ -459,7 +458,6 @@ msgEl.addEventListener("keydown",(e)=>{
   if (e.key === "Enter") sendBtn.click();
 });
 
-// -------- Delete chat for me --------
 deleteChatBtn.onclick = async () => {
   if (!currentChatId) return;
   const ref = doc(db, "chats", currentChatId);
@@ -481,7 +479,7 @@ deleteChatBtn.onclick = async () => {
   msgsEl.innerHTML = "";
 };
 
-// -------- Context menu (React / Reply / Delete) --------
+// Context menu
 function closeCtxMenu(){
   ctxMenu.classList.add("hidden");
   ctxMenu.setAttribute("aria-hidden","true");
@@ -584,7 +582,7 @@ async function softDeleteMessage(chatId, msgId){
   await updateDoc(msgRef, { deleted: true, text: "", deletedAt: serverTimestamp() });
 }
 
-// -------- Init --------
+// Init
 setStatus("Ready");
 subscribeChatList();
 msgEl.disabled = true;
