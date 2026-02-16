@@ -31,6 +31,7 @@ body{
   gap:18px;
 }
 
+/* ---------- TOP BAR ---------- */
 .top{
   display:flex;
   align-items:center;
@@ -60,6 +61,16 @@ body{
 .rightTop{ display:flex; gap:10px; align-items:center; }
 .status{ font-size:12px; color:var(--muted); }
 
+/* ---------- BASICS ---------- */
+.card{
+  padding:14px;
+  border-radius:var(--r);
+  background: rgba(0,0,0,.16);
+  border:1px solid rgba(255,255,255,.12);
+  backdrop-filter: blur(10px);
+}
+.cardTitle{ font-weight:950; margin-bottom:12px; }
+
 .btn{
   appearance:none;
   border:1px solid rgba(255,255,255,.12);
@@ -74,6 +85,7 @@ body{
 .btn:hover{ background: rgba(255,255,255,.09); border-color: rgba(255,255,255,.18); }
 .btn:active{ transform: translateY(1px); }
 .btn:disabled{ opacity:.55; cursor:not-allowed; }
+
 .btn.primary{
   background: radial-gradient(circle at 30% 30%, var(--b), var(--a));
   color:#071027;
@@ -100,15 +112,50 @@ body{
 .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px; }
 .hint{ margin-top:10px; font-size:12px; color:rgba(238,242,255,.70); min-height:16px; }
 
-.card{
-  padding:14px;
-  border-radius:var(--r);
-  background: rgba(0,0,0,.16);
-  border:1px solid rgba(255,255,255,.12);
-  backdrop-filter: blur(10px);
-}
-.cardTitle{ font-weight:950; margin-bottom:12px; }
+.muted{ opacity:.75; }
+.mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
 
+.hidden{ display:none !important; }
+
+/* ---------- ACCOUNT PAGE LAYOUT (THIS FIXES IT) ---------- */
+.single{ display:grid; place-items:center; }
+.cardWide{ width: min(680px, 100%); }
+
+.centerWrap{
+  display:grid;
+  place-items:center;
+  padding: 24px 0 8px;
+}
+.bigName{
+  font-size: 34px;
+  font-weight: 1000;
+  letter-spacing: .3px;
+  text-align:center;
+  margin: 4px 0;
+}
+.bigId{
+  font-size: 16px;
+  opacity: .9;
+  text-align:center;
+  margin-top: 6px;
+}
+.aboutBox{
+  margin-top: 18px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(0,0,0,.16);
+  color: rgba(238,242,255,.78);
+  font-size: 13px;
+  line-height: 1.35;
+}
+.divider{
+  height:1px;
+  background: rgba(255,255,255,.10);
+  margin: 16px 0;
+}
+
+/* ---------- CHAT PAGE LAYOUT ---------- */
 .appGrid{
   display:grid;
   grid-template-columns: 420px 1fr;
@@ -130,8 +177,6 @@ body{
   gap:4px;
   margin-bottom:12px;
 }
-.muted{ opacity:.75; }
-.mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
 
 .dividerSmall{
   height:1px;
@@ -328,17 +373,6 @@ body{
 .modalSub{ margin-top: 4px; font-size: 12px; opacity: .8; }
 .modalBody{ padding-top: 12px; }
 
-.aboutBox{
-  margin: 10px 0 12px;
-  padding: 12px;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,.12);
-  background: rgba(255,255,255,.06);
-  color: rgba(238,242,255,.78);
-  font-size: 13px;
-  line-height: 1.35;
-}
-
 /* Context menu */
 .ctxMenu{
   position: fixed;
@@ -358,7 +392,6 @@ body{
   to{ opacity:1; transform: scale(1) translateY(0); }
 }
 .ctxMenu.hidden{ display:none; }
-
 .ctxHeader{
   font-weight:950;
   font-size: 12px;
@@ -367,7 +400,6 @@ body{
   border-bottom: 1px solid rgba(255,255,255,.10);
   margin-bottom: 10px;
 }
-
 .ctxSection{ padding: 0 4px 10px; }
 .ctxLabel{ font-size: 11px; color: rgba(238,242,255,.65); margin: 0 4px 8px; }
 .ctxReacts{ display:flex; gap:8px; flex-wrap:wrap; padding: 0 4px; }
