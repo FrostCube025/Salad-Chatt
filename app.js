@@ -7,15 +7,15 @@ import {
   addDoc,
   updateDoc,
   getDoc,
+  onSnapshot,
   serverTimestamp,
   query,
   where,
   orderBy,
-  limit,
-  onSnapshot
+  limit
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
 
-/* Firebase config (embedded as requested) */
+/* Firebase config (embedded) */
 const firebaseConfig = {
   apiKey: "AIzaSyDrZ-maG46ecU5Fgidqyrws1DdNoEfqeFI",
   authDomain: "salad-chatt.firebaseapp.com",
@@ -31,27 +31,34 @@ const db = getFirestore(app);
 
 const el = (id) => document.getElementById(id);
 
+// Header
 const statusEl = el("status");
 const accountBtn = el("accountBtn");
 
+// Me
 const meNameEl = el("meName");
 const meIdEl = el("meId");
 
+// Contacts
 const addContactIdEl = el("addContactId");
 const addContactBtn = el("addContactBtn");
-const hintEl = el("hint");
-
 const contactListEl = el("contactList");
+
+// Chats
 const chatListEl = el("chatList");
 
+// Right pane
 const chatTitleEl = el("chatTitle");
 const chatMetaEl = el("chatMeta");
 const deleteChatBtn = el("deleteChatBtn");
-
 const msgsEl = el("messages");
 const msgEl = el("msg");
 const sendBtn = el("sendBtn");
 
+// Hints
+const hintEl = el("hint");
+
+// Reply bar (kept, but not required for contact fix)
 const replyBar = el("replyBar");
 const replyToNameEl = el("replyToName");
 const replyPreviewEl = el("replyPreview");
@@ -68,7 +75,7 @@ const profileCopyBtn = el("profileCopyBtn");
 const profileStartDmBtn = el("profileStartDmBtn");
 const profileHintEl = el("profileHint");
 
-// Context menu
+// Context menu (kept)
 const ctxMenu = el("ctxMenu");
 const ctxHeader = el("ctxHeader");
 const ctxReacts = el("ctxReacts");
@@ -89,12 +96,13 @@ const user = loadLocalUser();
 if (!user?.id || !user?.name){
   window.location.replace("./account.html");
 }
+
 const myId = user.id;
 const myName = user.name;
+const myAbout = user.about || "";
 
 meNameEl.textContent = myName;
 meIdEl.textContent = myId;
-
 accountBtn.onclick = () => window.location.href = "./account.html";
 
 const REACTIONS = ["👍","😂","❤️","🔥"];
@@ -107,6 +115,18 @@ let unsubMessages = null;
 let replyTarget = null;
 let ctxTarget = null;
 
+// ---------- Helpers ----------
+function dmChatId(a,b){
+  const [x,y] = [a,b].sort();
+  return `dm_${x}_${y}`;
+}
+
+function escapeHtml(s){
+  return String(s || "").replace(/[&<>"']/g, (c) => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+  }[c]));
+}
+
 function isNearBottom(container){
   return container.scrollHeight - container.scrollTop - container.clientHeight < 140;
 }
@@ -118,7 +138,7 @@ function fmtTime(ts){
   return d ? d.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" }) : "";
 }
 
-// code formatting
+// code formatting (unchanged)
 function renderFormattedText(container, rawText){
   const text = rawText ?? "";
   const parts = text.split("```");
@@ -146,17 +166,13 @@ function renderFormattedText(container, rawText){
   });
 }
 
-function dmChatId(a,b){
-  const [x,y] = [a,b].sort();
-  return `dm_${x}_${y}`;
-}
-
-async function ensureUserExists(userId){
+// ---------- Users ----------
+async function getUserById(userId){
   const snap = await getDoc(doc(db, "users", userId));
   return snap.exists() ? snap.data() : null;
 }
 
-/* ---------- Profile modal ---------- */
+// ---------- Profile modal ----------
 async function openProfile(userId){
   setProfileHint("");
   profileModal.classList.remove("hidden");
@@ -167,14 +183,13 @@ async function openProfile(userId){
   profileAboutEl.textContent = "—";
 
   try{
-    const snap = await getDoc(doc(db, "users", userId));
-    if (!snap.exists()){
+    const u = await getUserById(userId);
+    if (!u){
       profileNameEl.textContent = "Unknown user";
       profileAboutEl.textContent = "No description.";
       setProfileHint("This user does not exist (or was deleted).");
       return;
     }
-    const u = snap.data();
     profileNameEl.textContent = u.name || "Unknown";
     profileIdEl.textContent = u.id || userId;
     profileAboutEl.textContent = (u.about && u.about.trim()) ? u.about : "No description yet.";
@@ -191,7 +206,6 @@ async function openProfile(userId){
   };
 
   profileStartDmBtn.onclick = async () => {
-    if (!/^\d{10}$/.test(userId)) return;
     await ensureDmChat(userId);
     closeProfile();
   };
@@ -205,22 +219,26 @@ function closeProfile(){
 profileCloseBtn.onclick = closeProfile;
 profileBackdrop.onclick = closeProfile;
 
-/* ---------- Contacts ---------- */
-// Contacts stored at: users/{myId}/contacts/{contactId}
+// ---------- Contacts (FIXED) ----------
 function contactsColl(userId){
   return collection(db, "users", userId, "contacts");
 }
 
 async function upsertContact(ownerId, contactUser){
-  // contactUser: {id, name, about}
-  await setDoc(doc(db, "users", ownerId, "contacts", contactUser.id), {
+  // contactUser must include id
+  const ref = doc(db, "users", ownerId, "contacts", contactUser.id);
+  await setDoc(ref, {
     id: contactUser.id,
-    name: contactUser.name || "Unknown",
+    name: contactUser.name || contactUser.id,
     about: contactUser.about || "",
-    addedAt: serverTimestamp()
+    updatedAt: serverTimestamp()
   }, { merge: true });
 }
 
+/**
+ * Adds contact to BOTH sides (auto appears for you and them).
+ * If your rules are not updated, this will throw — and we show the error.
+ */
 async function addContactMutual(otherId){
   if (!/^\d{10}$/.test(otherId)){
     setHint("Contact ID must be 10 digits.");
@@ -232,19 +250,24 @@ async function addContactMutual(otherId){
   }
 
   setHint("Checking user…");
-  const otherUser = await ensureUserExists(otherId);
+  const otherUser = await getUserById(otherId);
   if (!otherUser){
     setHint("No user found with that ID.");
     return;
   }
 
-  // Add to my contacts
-  await upsertContact(myId, { id: otherId, name: otherUser.name, about: otherUser.about });
+  try{
+    // Add to my contacts
+    await upsertContact(myId, { id: otherId, name: otherUser.name, about: otherUser.about });
 
-  // Add me to their contacts (auto-appears on both sides)
-  await upsertContact(otherId, { id: myId, name: myName, about: user.about || "" });
+    // Add me to their contacts
+    await upsertContact(otherId, { id: myId, name: myName, about: myAbout });
 
-  setHint("Contact added!");
+    setHint("Contact added!");
+  } catch(e){
+    console.error(e);
+    setHint("Failed to add contact. Check Firestore rules (contacts).");
+  }
 }
 
 addContactBtn.onclick = async () => {
@@ -253,14 +276,23 @@ addContactBtn.onclick = async () => {
   await addContactMutual(otherId);
 };
 
+/**
+ * IMPORTANT FIX:
+ * Do NOT use orderBy on serverTimestamp fields here.
+ * Just listen to the whole collection and sort locally.
+ */
 function subscribeContacts(){
   if (unsubContacts) unsubContacts();
 
-  const q = query(contactsColl(myId), orderBy("addedAt","desc"), limit(100));
-  unsubContacts = onSnapshot(q, (snap) => {
+  unsubContacts = onSnapshot(contactsColl(myId), (snap) => {
+    const contacts = [];
+    snap.forEach((d) => contacts.push(d.data()));
+
+    // sort locally by name
+    contacts.sort((a,b) => String(a.name||"").localeCompare(String(b.name||"")));
+
     contactListEl.innerHTML = "";
-    snap.forEach((d) => {
-      const c = d.data();
+    contacts.forEach((c) => {
       const div = document.createElement("div");
       div.className = "item";
       div.innerHTML = `
@@ -272,13 +304,24 @@ function subscribeContacts(){
       };
       contactListEl.appendChild(div);
     });
+  }, (err) => {
+    console.error(err);
+    setHint("Contacts listener failed. Check Firestore rules for contacts.");
   });
 }
 
-/* ---------- Chats ---------- */
+// ---------- Chats ----------
 async function ensureDmChat(otherId){
-  setHint("");
-  const otherUser = await ensureUserExists(otherId);
+  if (!/^\d{10}$/.test(otherId)){
+    setHint("Invalid ID.");
+    return;
+  }
+  if (otherId === myId){
+    setHint("You can’t chat with yourself.");
+    return;
+  }
+
+  const otherUser = await getUserById(otherId);
   if (!otherUser){
     setHint("No user found with that ID.");
     return;
@@ -338,6 +381,9 @@ function subscribeChats(){
       div.onclick = () => openChat(chatId);
       chatListEl.appendChild(div);
     });
+  }, (err) => {
+    console.error(err);
+    setHint("Chats listener failed. Check Firestore rules for chats.");
   });
 }
 
@@ -370,6 +416,7 @@ async function openChat(chatId){
   subscribeMessages(chatId);
 }
 
+// ---------- Messages ----------
 function subscribeMessages(chatId){
   if (unsubMessages) unsubMessages();
   msgsEl.innerHTML = "";
@@ -394,6 +441,7 @@ function subscribeMessages(chatId){
       bubble.dataset.nick = m.senderName || "Unknown";
       bubble.dataset.preview = (m.deleted ? "Message deleted" : (m.text || "")).slice(0,140);
 
+      // Context menu handler
       attachContextHandlers(bubble, chatId, d.id);
 
       const name = document.createElement("div");
@@ -405,14 +453,10 @@ function subscribeMessages(chatId){
       if (m.replyTo && m.replyTo.nick) {
         const chip = document.createElement("div");
         chip.className = "replyChip";
-        const rn = document.createElement("div");
-        rn.className = "replyNick";
-        rn.textContent = `Replying to ${m.replyTo.nick}`;
-        const rt = document.createElement("div");
-        rt.className = "replyText";
-        rt.textContent = m.replyTo.preview || "";
-        chip.appendChild(rn);
-        chip.appendChild(rt);
+        chip.innerHTML = `
+          <div class="replyNick">Replying to ${escapeHtml(m.replyTo.nick)}</div>
+          <div class="replyText">${escapeHtml(m.replyTo.preview || "")}</div>
+        `;
         bubble.appendChild(chip);
       }
 
@@ -467,7 +511,7 @@ function hideReply(){
 }
 cancelReplyBtn.onclick = () => hideReply();
 
-/* ---------- Send message ---------- */
+/* ---------- Send ---------- */
 sendBtn.onclick = async () => {
   if (!currentChatId) return;
   const text = (msgEl.value || "").trim();
@@ -501,7 +545,7 @@ msgEl.addEventListener("keydown",(e)=>{
   if (e.key === "Enter") sendBtn.click();
 });
 
-/* ---------- Hide chat for me ---------- */
+/* ---------- Hide chat ---------- */
 deleteChatBtn.onclick = async () => {
   if (!currentChatId) return;
   const ref = doc(db, "chats", currentChatId);
@@ -624,21 +668,10 @@ async function softDeleteMessage(chatId, msgId){
   await updateDoc(msgRef, { deleted: true, text: "", deletedAt: serverTimestamp() });
 }
 
-/* ---------- Safety: escape HTML for list items ---------- */
-function escapeHtml(s){
-  return String(s || "").replace(/[&<>"']/g, (c) => ({
-    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
-  }[c]));
-}
-
 /* ---------- Init ---------- */
 setStatus("Ready");
 subscribeContacts();
 subscribeChats();
-
 msgEl.disabled = true;
 sendBtn.disabled = true;
 deleteChatBtn.disabled = true;
-
-profileCloseBtn && (profileCloseBtn.onclick = closeProfile);
-profileBackdrop && (profileBackdrop.onclick = closeProfile);
