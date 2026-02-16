@@ -15,7 +15,7 @@ import {
   onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
 
-/* ===== PASTE YOUR FIREBASE CONFIG HERE (same as account.html) ===== */
+/* Firebase config (embedded as requested) */
 const firebaseConfig = {
   apiKey: "AIzaSyDrZ-maG46ecU5Fgidqyrws1DdNoEfqeFI",
   authDomain: "salad-chatt.firebaseapp.com",
@@ -25,8 +25,6 @@ const firebaseConfig = {
   appId: "1:841208847669:web:568e254429166d05c2c07c",
   measurementId: "G-FFF48MW8EL"
 };
-
-/* ================================================================= */
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
@@ -39,10 +37,11 @@ const accountBtn = el("accountBtn");
 const meNameEl = el("meName");
 const meIdEl = el("meId");
 
-const newChatIdEl = el("newChatId");
-const startChatBtn = el("startChatBtn");
+const addContactIdEl = el("addContactId");
+const addContactBtn = el("addContactBtn");
 const hintEl = el("hint");
 
+const contactListEl = el("contactList");
 const chatListEl = el("chatList");
 
 const chatTitleEl = el("chatTitle");
@@ -90,7 +89,6 @@ const user = loadLocalUser();
 if (!user?.id || !user?.name){
   window.location.replace("./account.html");
 }
-
 const myId = user.id;
 const myName = user.name;
 
@@ -102,7 +100,8 @@ accountBtn.onclick = () => window.location.href = "./account.html";
 const REACTIONS = ["👍","😂","❤️","🔥"];
 
 let currentChatId = null;
-let unsubChatList = null;
+let unsubContacts = null;
+let unsubChats = null;
 let unsubMessages = null;
 
 let replyTarget = null;
@@ -157,7 +156,7 @@ async function ensureUserExists(userId){
   return snap.exists() ? snap.data() : null;
 }
 
-// Profile modal
+/* ---------- Profile modal ---------- */
 async function openProfile(userId){
   setProfileHint("");
   profileModal.classList.remove("hidden");
@@ -193,9 +192,7 @@ async function openProfile(userId){
 
   profileStartDmBtn.onclick = async () => {
     if (!/^\d{10}$/.test(userId)) return;
-    newChatIdEl.value = userId;
-    setProfileHint("Starting chat…");
-    await startChatBtn.onclick();
+    await ensureDmChat(userId);
     closeProfile();
   };
 }
@@ -205,54 +202,141 @@ function closeProfile(){
   profileModal.setAttribute("aria-hidden","true");
   setProfileHint("");
 }
-
 profileCloseBtn.onclick = closeProfile;
 profileBackdrop.onclick = closeProfile;
-document.addEventListener("keydown",(e)=>{
-  if(e.key==="Escape" && !profileModal.classList.contains("hidden")) closeProfile();
-});
 
-// Chat list
-function renderChatItem(chatId, chat){
-  const hiddenFor = chat.hiddenFor || [];
-  if (hiddenFor.includes(myId)) return null;
-
-  const div = document.createElement("div");
-  div.className = "chatItem" + (chatId === currentChatId ? " active" : "");
-  div.dataset.chatId = chatId;
-
-  const title = document.createElement("div");
-  title.className = "title";
-
-  let display = chat.title || "Chat";
-  if (chat.type === "dm"){
-    const other = (chat.members || []).find(m => m !== myId) || "Unknown";
-    display = chat.memberNames?.[other] || other;
-  }
-  title.textContent = display;
-
-  const sub = document.createElement("div");
-  sub.className = "sub";
-  sub.textContent = chat.lastPreview || "No messages yet";
-
-  div.appendChild(title);
-  div.appendChild(sub);
-
-  div.onclick = () => openChat(chatId);
-  return div;
+/* ---------- Contacts ---------- */
+// Contacts stored at: users/{myId}/contacts/{contactId}
+function contactsColl(userId){
+  return collection(db, "users", userId, "contacts");
 }
 
-function subscribeChatList(){
-  if (unsubChatList) unsubChatList();
+async function upsertContact(ownerId, contactUser){
+  // contactUser: {id, name, about}
+  await setDoc(doc(db, "users", ownerId, "contacts", contactUser.id), {
+    id: contactUser.id,
+    name: contactUser.name || "Unknown",
+    about: contactUser.about || "",
+    addedAt: serverTimestamp()
+  }, { merge: true });
+}
+
+async function addContactMutual(otherId){
+  if (!/^\d{10}$/.test(otherId)){
+    setHint("Contact ID must be 10 digits.");
+    return;
+  }
+  if (otherId === myId){
+    setHint("You can’t add yourself.");
+    return;
+  }
+
+  setHint("Checking user…");
+  const otherUser = await ensureUserExists(otherId);
+  if (!otherUser){
+    setHint("No user found with that ID.");
+    return;
+  }
+
+  // Add to my contacts
+  await upsertContact(myId, { id: otherId, name: otherUser.name, about: otherUser.about });
+
+  // Add me to their contacts (auto-appears on both sides)
+  await upsertContact(otherId, { id: myId, name: myName, about: user.about || "" });
+
+  setHint("Contact added!");
+}
+
+addContactBtn.onclick = async () => {
+  const otherId = (addContactIdEl.value || "").trim();
+  addContactIdEl.value = "";
+  await addContactMutual(otherId);
+};
+
+function subscribeContacts(){
+  if (unsubContacts) unsubContacts();
+
+  const q = query(contactsColl(myId), orderBy("addedAt","desc"), limit(100));
+  unsubContacts = onSnapshot(q, (snap) => {
+    contactListEl.innerHTML = "";
+    snap.forEach((d) => {
+      const c = d.data();
+      const div = document.createElement("div");
+      div.className = "item";
+      div.innerHTML = `
+        <div class="title">${escapeHtml(c.name || c.id)}</div>
+        <div class="sub">${escapeHtml(c.id)} • click to chat</div>
+      `;
+      div.onclick = async () => {
+        await ensureDmChat(c.id);
+      };
+      contactListEl.appendChild(div);
+    });
+  });
+}
+
+/* ---------- Chats ---------- */
+async function ensureDmChat(otherId){
+  setHint("");
+  const otherUser = await ensureUserExists(otherId);
+  if (!otherUser){
+    setHint("No user found with that ID.");
+    return;
+  }
+
+  const chatId = dmChatId(myId, otherId);
+  const chatRef = doc(db, "chats", chatId);
+
+  const existing = await getDoc(chatRef);
+  if (!existing.exists()){
+    await setDoc(chatRef, {
+      type: "dm",
+      members: [myId, otherId],
+      memberNames: { [myId]: myName, [otherId]: otherUser.name },
+      createdAt: serverTimestamp(),
+      lastMessageAt: serverTimestamp(),
+      lastPreview: "Chat created",
+      hiddenFor: []
+    });
+  } else {
+    await updateDoc(chatRef, {
+      [`memberNames.${myId}`]: myName,
+      [`memberNames.${otherId}`]: otherUser.name
+    });
+  }
+
+  await openChat(chatId);
+}
+
+function subscribeChats(){
+  if (unsubChats) unsubChats();
 
   const chatsRef = collection(db, "chats");
   const q = query(chatsRef, where("members", "array-contains", myId), orderBy("lastMessageAt", "desc"), limit(50));
 
-  unsubChatList = onSnapshot(q, (snap) => {
+  unsubChats = onSnapshot(q, (snap) => {
     chatListEl.innerHTML = "";
     snap.forEach((d) => {
-      const item = renderChatItem(d.id, d.data());
-      if (item) chatListEl.appendChild(item);
+      const chatId = d.id;
+      const chat = d.data();
+      if ((chat.hiddenFor || []).includes(myId)) return;
+
+      const div = document.createElement("div");
+      div.className = "item" + (chatId === currentChatId ? " active" : "");
+      div.dataset.chatId = chatId;
+
+      let title = chat.title || "Chat";
+      if (chat.type === "dm"){
+        const other = (chat.members || []).find(m => m !== myId) || "Unknown";
+        title = chat.memberNames?.[other] || other;
+      }
+
+      div.innerHTML = `
+        <div class="title">${escapeHtml(title)}</div>
+        <div class="sub">${escapeHtml(chat.lastPreview || "No messages yet")}</div>
+      `;
+      div.onclick = () => openChat(chatId);
+      chatListEl.appendChild(div);
     });
   });
 }
@@ -260,7 +344,7 @@ function subscribeChatList(){
 async function openChat(chatId){
   currentChatId = chatId;
 
-  Array.from(chatListEl.querySelectorAll(".chatItem")).forEach(n => {
+  Array.from(chatListEl.querySelectorAll(".item")).forEach(n => {
     n.classList.toggle("active", n.dataset.chatId === chatId);
   });
 
@@ -367,51 +451,7 @@ function subscribeMessages(chatId){
   });
 }
 
-startChatBtn.onclick = async () => {
-  const otherId = (newChatIdEl.value || "").trim();
-  if (!/^\d{10}$/.test(otherId)){
-    setHint("Friend ID must be 10 digits.");
-    return;
-  }
-  if (otherId === myId){
-    setHint("You can’t chat with yourself.");
-    return;
-  }
-
-  setHint("Checking user…");
-  const otherUser = await ensureUserExists(otherId);
-  if (!otherUser){
-    setHint("No user found with that ID.");
-    return;
-  }
-
-  const chatId = dmChatId(myId, otherId);
-  const chatRef = doc(db, "chats", chatId);
-
-  const existing = await getDoc(chatRef);
-  if (!existing.exists()){
-    await setDoc(chatRef, {
-      type: "dm",
-      members: [myId, otherId],
-      memberNames: { [myId]: myName, [otherId]: otherUser.name },
-      createdAt: serverTimestamp(),
-      lastMessageAt: serverTimestamp(),
-      lastPreview: "Chat created",
-      hiddenFor: []
-    });
-  } else {
-    await updateDoc(chatRef, {
-      [`memberNames.${myId}`]: myName,
-      [`memberNames.${otherId}`]: otherUser.name
-    });
-  }
-
-  newChatIdEl.value = "";
-  setHint("");
-  await openChat(chatId);
-};
-
-// Reply UI
+/* ---------- Reply UI ---------- */
 function showReply(target){
   replyTarget = target;
   replyBar.classList.remove("hidden");
@@ -427,6 +467,7 @@ function hideReply(){
 }
 cancelReplyBtn.onclick = () => hideReply();
 
+/* ---------- Send message ---------- */
 sendBtn.onclick = async () => {
   if (!currentChatId) return;
   const text = (msgEl.value || "").trim();
@@ -460,6 +501,7 @@ msgEl.addEventListener("keydown",(e)=>{
   if (e.key === "Enter") sendBtn.click();
 });
 
+/* ---------- Hide chat for me ---------- */
 deleteChatBtn.onclick = async () => {
   if (!currentChatId) return;
   const ref = doc(db, "chats", currentChatId);
@@ -469,7 +511,6 @@ deleteChatBtn.onclick = async () => {
   const chat = snap.data();
   const hiddenFor = new Set(chat.hiddenFor || []);
   hiddenFor.add(myId);
-
   await updateDoc(ref, { hiddenFor: Array.from(hiddenFor) });
 
   currentChatId = null;
@@ -481,7 +522,7 @@ deleteChatBtn.onclick = async () => {
   msgsEl.innerHTML = "";
 };
 
-// Context menu
+/* ---------- Context menu ---------- */
 function closeCtxMenu(){
   ctxMenu.classList.add("hidden");
   ctxMenu.setAttribute("aria-hidden","true");
@@ -575,7 +616,6 @@ async function reactToMessage(chatId, msgId, emoji){
   const data = snap.data();
   const reactions = data.reactions || {};
   const current = Number(reactions[emoji] || 0);
-
   await updateDoc(msgRef, { [`reactions.${emoji}`]: current + 1 });
 }
 
@@ -584,9 +624,21 @@ async function softDeleteMessage(chatId, msgId){
   await updateDoc(msgRef, { deleted: true, text: "", deletedAt: serverTimestamp() });
 }
 
-// Init
+/* ---------- Safety: escape HTML for list items ---------- */
+function escapeHtml(s){
+  return String(s || "").replace(/[&<>"']/g, (c) => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+  }[c]));
+}
+
+/* ---------- Init ---------- */
 setStatus("Ready");
-subscribeChatList();
+subscribeContacts();
+subscribeChats();
+
 msgEl.disabled = true;
 sendBtn.disabled = true;
 deleteChatBtn.disabled = true;
+
+profileCloseBtn && (profileCloseBtn.onclick = closeProfile);
+profileBackdrop && (profileBackdrop.onclick = closeProfile);
